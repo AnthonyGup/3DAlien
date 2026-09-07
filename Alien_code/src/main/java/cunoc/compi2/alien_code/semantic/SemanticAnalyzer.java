@@ -1,7 +1,7 @@
 package cunoc.compi2.alien_code.semantic;
 
 import cunoc.compi2.alien_code.ast.ASTVisitor;
-import cunoc.compi2.alien_code.ast.ProgramNode;
+import cunoc.compi2.alien_code.ast.program.ProgramNode;
 import cunoc.compi2.alien_code.ast.Type;
 import cunoc.compi2.alien_code.errors.ErrorListener;
 

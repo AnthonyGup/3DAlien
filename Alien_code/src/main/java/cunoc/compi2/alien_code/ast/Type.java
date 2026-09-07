@@ -37,12 +37,11 @@ public enum Type {
 
     public static Type fromPigLatin(String name) {
         return switch (name.toLowerCase()) {
-            case "int" -> INT;
-            case "float" -> FLOAT;
-            case "string" -> STRING;
+            case "numerus" -> INT;
+            case "decimalis" -> FLOAT;
+            case "textum" -> STRING;
+            case "littera" -> CHAR;
             case "bool" -> BOOL;
-            case "char" -> CHAR;
-            case "void" -> VOID;
             default -> null;
         };
     }

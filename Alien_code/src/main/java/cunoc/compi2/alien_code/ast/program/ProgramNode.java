@@ -1,4 +1,8 @@
-package cunoc.compi2.alien_code.ast;
+package cunoc.compi2.alien_code.ast.program;
+import cunoc.compi2.alien_code.ast.CodigoContexto;
+import cunoc.compi2.alien_code.ast.ASTVisitor;
+
+import cunoc.compi2.alien_code.ast.Node;
 
 import java.util.List;
 
@@ -23,4 +27,10 @@ public class ProgramNode implements Node {
 
     @Override
     public int getColumn() { return column; }
+
+
+    @Override
+    public String traducir(CodigoContexto ctx) {
+        return null;
+    }
 }
