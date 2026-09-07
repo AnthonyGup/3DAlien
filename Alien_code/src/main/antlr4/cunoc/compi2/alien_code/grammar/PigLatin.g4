@@ -1,139 +1,274 @@
 grammar PigLatin;
 
-program
-    : declaration* EOF
+programa
+    : importacion* seccionVariables? seccionPrincipal EOF
     ;
 
-declaration
-    : functionDecl
-    | varDecl
-    | classDecl
+importacion
+    : IMPORT rutaArchivo PUNTO_COMA?
     ;
 
-functionDecl
-    : type_ ID '(' parameters? ')' block
+rutaArchivo
+    : IDENTIFICADOR (PUNTO IDENTIFICADOR)*
     ;
 
-varDecl
-    : type_ ID ('[' LITERAL_INT ']')* ('=' expression)? ';'
+seccionVariables
+    : VARIABILES_MARKER declaracion*
     ;
 
-classDecl
-    : 'class' ID ('extends' ID)? '{' member* '}'
+seccionPrincipal
+    : MAIOR_MARKER sentenciaPrincipal* PROGRAMA_FIN PUNTO_COMA
     ;
 
-member
-    : field
-    | functionDecl
+sentenciaPrincipal
+    : sentencia
+    | condicional
     ;
 
-field
-    : type_ ID ';'
+declaracion
+    : declaracionVariable
+    | declaracionArreglo
     ;
 
-type_
-    : 'int'
-    | 'float'
-    | 'string'
-    | 'bool'
-    | 'char'
-    | 'void'
-    | ID
+declaracionVariable
+    : ESTO IDENTIFICADOR DOS_PUNTOS (VERUM | FALSUS) PUNTO_COMA
+    | ESTO IDENTIFICADOR DOS_PUNTOS tipoPrimitivo expresion PUNTO_COMA
+    | ESTO IDENTIFICADOR DOS_PUNTOS NOVUS IDENTIFICADOR PAREN_IZQ argumentos? PAREN_DER PUNTO_COMA
+    | ESTO IDENTIFICADOR DOS_PUNTOS IDENTIFICADOR literalStructura PUNTO_COMA
+    | ESTO IDENTIFICADOR DOS_PUNTOS IDENTIFICADOR PUNTO_COMA
     ;
 
-parameters
-    : parameter (',' parameter)*
+declaracionArreglo
+    : SERIES IDENTIFICADOR CORCHETE_IZQ NUMERO CORCHETE_DER DOS_PUNTOS tipo inicializadorArreglo? PUNTO_COMA
     ;
 
-parameter
-    : type_ ID
+literalStructura
+    : LLAVE_IZQ valorAtributo (COMA valorAtributo)* LLAVE_DER
     ;
 
-block
-    : '{' statement* '}'
+valorAtributo
+    : literalStructura
+    | expresion
     ;
 
-statement
-    : block
-    | varDecl
-    | ifStatement
-    | whileStatement
-    | forStatement
-    | doWhileStatement
-    | returnStatement
-    | printStatement
-    | readStatement
-    | expression ';'
-    | assignment
+inicializadorArreglo
+    : LLAVE_IZQ expresion (COMA expresion)* LLAVE_DER
     ;
 
-ifStatement
-    : 'if' '(' expression ')' block ('elif' '(' expression ')' block)* ('else' block)?
+tipo
+    : tipoPrimitivo
+    | IDENTIFICADOR
     ;
 
-whileStatement
-    : 'while' '(' expression ')' block
+tipoPrimitivo
+    : NUMERUS
+    | DECIMALIS
+    | TEXTUM
+    | LITTERA
+    | BOOL
     ;
 
-forStatement
-    : 'for' '(' (varDecl | assignment | expression) ';' expression ';' expression ')' block
+argumentos
+    : expresion (COMA expresion)*
     ;
 
-doWhileStatement
-    : 'do' block 'while' '(' expression ')' ';'
+sentencia
+    : asignacion
+    | incremento
+    | decremento
+    | ciclo
+    | perge
+    | interrumpe
+    | accesoVariable PUNTO_COMA
+    | leer
+    | imprimir
     ;
 
-returnStatement
-    : 'return' expression? ';'
+leer
+    : LEER PUNTO_COMA?
+    | accesoVariable LEER PUNTO_COMA?
     ;
 
-printStatement
-    : 'print' '(' expression (',' expression)* ')' ';'
+imprimir
+    : ESCRIBIR (ESCRIBIR? expresion)+ PUNTO_COMA
     ;
 
-readStatement
-    : 'read' '(' ID ')' ';'
+ciclo
+    : dum
+    | facere
+    | per
     ;
 
-assignment
-    : ID '=' expression ';'
-    | ID '[' expression ']' '=' expression ';'
+dum
+    : DUM PAREN_IZQ expresion PAREN_DER cuerpoBloque FINIS PUNTO_COMA
     ;
 
-expression
-    : LITERAL_INT                             # LiteralInt
-    | LITERAL_FLOAT                           # LiteralFloat
-    | LITERAL_STRING                          # LiteralString
-    | LITERAL_CHAR                            # LiteralChar
-    | 'true'                                  # LiteralBool
-    | 'false'                                 # LiteralBool
-    | ID                                      # Identifier
-    | ID '(' (expression (',' expression)*)? ')' # FunctionCall
-    | ID '[' expression ']'                   # ArrayAccess
-    | expression '.' ID                       # FieldAccess
-    | expression '.' ID '(' (expression (',' expression)*)? ')' # MethodCall
-    | 'new' ID '(' (expression (',' expression)*)? ')' # ObjectCreation
-    | '(' expression ')'                      # Parentheses
-    | expression operatorBin expression       # BinaryExpr
-    | operatorUnary expression                # UnaryExpr
-    | expression '?' expression ':' expression # TernaryExpr
+facere
+    : FACERE cuerpoBloque DUM PAREN_IZQ expresion PAREN_DER PUNTO_COMA
     ;
 
-operatorBin
-    : '+' | '-' | '*' | '/' | '%'
-    | '==' | '!=' | '<' | '>' | '<=' | '>='
-    | '&&' | '||'
+per
+    : PER PAREN_IZQ inicializadorCiclo PUNTO_COMA expresion PUNTO_COMA pasoCiclo PAREN_DER cuerpoBloque (FINIS PUNTO_COMA)?
     ;
 
-operatorUnary
-    : '-' | '!'
+inicializadorCiclo
+    : ESTO IDENTIFICADOR DOS_PUNTOS tipoPrimitivo expresion
     ;
 
-LITERAL_INT    : [0-9]+ ;
-LITERAL_FLOAT  : [0-9]+ '.' [0-9]+ ;
-LITERAL_STRING : '"' (~["\r\n])* '"' ;
-LITERAL_CHAR   : '\'' (~['\r\n]) '\'' ;
-ID             : [a-zA-Z_][a-zA-Z0-9_]* ;
-WS             : [ \t\r\n]+ -> skip ;
-LINE_COMMENT   : '//' ~[\r\n]* -> skip ;
-BLOCK_COMMENT  : '/*' .*? '*/' -> skip ;
+pasoCiclo
+    : IDENTIFICADOR INCREMENTO
+    | IDENTIFICADOR DECREMENTO
+    ;
+
+perge
+    : PERGE PUNTO_COMA
+    ;
+
+interrumpe
+    : INTERRUMPE PUNTO_COMA
+    ;
+
+condicional
+    : SI PAREN_IZQ expresion PAREN_DER cuerpoBloque aliter* FINIS PUNTO_COMA
+    ;
+
+aliter
+    : ALITER (PAREN_IZQ expresion PAREN_DER)? cuerpoBloque
+    ;
+
+cuerpoBloque
+    : LLAVE_IZQ sentenciaPrincipal* LLAVE_DER
+    ;
+
+asignacion
+    : accesoVariable ASIGNACION expresion PUNTO_COMA
+    ;
+
+incremento
+    : accesoVariable INCREMENTO PUNTO_COMA
+    ;
+
+decremento
+    : accesoVariable DECREMENTO PUNTO_COMA
+    ;
+
+expresion
+    : expresionOr
+    ;
+
+expresionOr
+    : expresionAnd (OR expresionAnd)*
+    ;
+
+expresionAnd
+    : expresionIgualdad (AND expresionIgualdad)*
+    ;
+
+expresionIgualdad
+    : expresionRelacional ((IGUAL | DISTINTO) expresionRelacional)*
+    ;
+
+expresionRelacional
+    : expresionAditiva ((MENOR | MAYOR | MENOR_IGUAL | MAYOR_IGUAL) expresionAditiva)*
+    ;
+
+expresionAditiva
+    : expresionMultiplicativa ((MAS | MENOS) expresionMultiplicativa)*
+    ;
+
+expresionMultiplicativa
+    : expresionUnaria ((POR | DIV) expresionUnaria)*
+    ;
+
+expresionUnaria
+    : NON expresionUnaria
+    | MENOS expresionUnaria
+    | factor
+    ;
+
+accesoVariable
+    : IDENTIFICADOR sufijoAcceso*
+    ;
+
+sufijoAcceso
+    : PUNTO IDENTIFICADOR
+    | CORCHETE_IZQ expresion CORCHETE_DER
+    | PAREN_IZQ argumentos? PAREN_DER
+    ;
+
+factor
+    : NUMERO
+    | DECIMAL
+    | CADENA
+    | CARACTER
+    | VERUM
+    | FALSUS
+    | NOVUS IDENTIFICADOR PAREN_IZQ argumentos? PAREN_DER
+    | accesoVariable
+    | literalStructura
+    | PAREN_IZQ expresion PAREN_DER
+    ;
+
+VARIABILES_MARKER : 'VARIABILES>';
+MAIOR_MARKER       : 'MAIOR>';
+
+IMPORT      : 'import';
+ESTO        : 'esto';
+SERIES      : 'series';
+NOVUS       : 'novus';
+FINIS       : 'finis';
+PROGRAMA_FIN : 'FINIS';
+SI          : 'si';
+ALITER      : 'aliter';
+DUM         : 'dum';
+FACERE      : 'facere';
+PER         : 'per';
+PERGE       : 'perge';
+INTERRUMPE  : 'interrumpe';
+NON         : 'non';
+VERUM       : 'verum';
+FALSUS      : 'falsus';
+NUMERUS     : 'numerus';
+DECIMALIS   : 'decimalis';
+TEXTUM      : 'textum';
+LITTERA     : 'littera';
+BOOL        : 'bool';
+
+OR            : '||';
+AND           : '&&';
+IGUAL         : '==';
+DISTINTO      : '!=';
+MENOR_IGUAL   : '<=';
+MAYOR_IGUAL   : '>=';
+INCREMENTO    : '++';
+DECREMENTO    : '--';
+LEER          : '<<';
+ESCRIBIR      : '>>';
+MENOR         : '<';
+MAYOR         : '>';
+ASIGNACION    : '=';
+MAS           : '+';
+MENOS         : '-';
+POR           : '*';
+DIV           : '/';
+
+PAREN_IZQ     : '(';
+PAREN_DER     : ')';
+LLAVE_IZQ     : '{';
+LLAVE_DER     : '}';
+CORCHETE_IZQ  : '[';
+CORCHETE_DER  : ']';
+DOS_PUNTOS    : ':';
+PUNTO_COMA    : ';';
+PUNTO         : '.';
+COMA          : ',';
+
+NUMERO          : [0-9]+;
+DECIMAL         : NUMERO '.' NUMERO;
+CADENA          : '"' ~'"'* '"';
+CARACTER        : '\'' ~'\'' '\'';
+IDENTIFICADOR   : [a-zA-Z_][a-zA-Z0-9_]*;
+
+COMENTARIO_LINEA  : '//' ~[\r\n]* -> channel(HIDDEN);
+COMENTARIO_BLOQUE : '##' .*? '##' -> channel(HIDDEN);
+WS                : [ \t\r\n]+ -> channel(HIDDEN);

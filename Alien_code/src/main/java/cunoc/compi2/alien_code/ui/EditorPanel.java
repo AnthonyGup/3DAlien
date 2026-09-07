@@ -35,6 +35,13 @@ public class EditorPanel extends JPanel {
         textArea.setAutoIndentEnabled(true);
         textArea.setTabSize(4);
 
+        if (archivo != null && archivo.isFile()) {
+            try {
+                textArea.setText(java.nio.file.Files.readString(archivo.toPath()));
+            } catch (java.io.IOException ignorada) {
+            }
+        }
+
         RTextScrollPane scrollPane = new RTextScrollPane(textArea);
         add(scrollPane, BorderLayout.CENTER);
 

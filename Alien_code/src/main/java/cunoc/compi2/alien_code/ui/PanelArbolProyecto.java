@@ -4,13 +4,17 @@ import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Graphics;
+import java.awt.GridLayout;
 import java.io.File;
 import javax.swing.Icon;
+import javax.swing.JComboBox;
+import javax.swing.JLabel;
 import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
+import javax.swing.JTextField;
 import javax.swing.JTree;
 import javax.swing.SwingUtilities;
 import javax.swing.event.TreeModelEvent;
@@ -158,12 +162,8 @@ public class PanelArbolProyecto extends JPanel {
             JOptionPane.showMessageDialog(this, "Abre una carpeta de proyecto primero.");
             return;
         }
-        String nombre = JOptionPane.showInputDialog(this, "Nombre del archivo:", "Nuevo archivo", JOptionPane.PLAIN_MESSAGE);
-        if (nombre == null || nombre.isBlank()) return;
-        if (!nombre.contains(".")) {
-            nombre = nombre + ".y";
-        }
-        File archivo = new File(dir, nombre);
+        File archivo = mostrarDialogoNuevoArchivo(this, dir);
+        if (archivo == null) return;
         try {
             if (archivo.createNewFile() && listenerArchivo != null) {
                 listenerArchivo.abrirArchivo(archivo);
@@ -172,6 +172,26 @@ public class PanelArbolProyecto extends JPanel {
         } catch (java.io.IOException ex) {
             JOptionPane.showMessageDialog(this, "No se pudo crear el archivo.", "Error", JOptionPane.ERROR_MESSAGE);
         }
+    }
+
+    static File mostrarDialogoNuevoArchivo(Component padre, File carpeta) {
+        JTextField campoNombre = new JTextField();
+        JComboBox<String> comboExtension = new JComboBox<>(new String[]{".y", ".z", ".pig"});
+        comboExtension.setSelectedItem(".pig");
+        JPanel panel = new JPanel(new GridLayout(0, 1, 6, 6));
+        panel.add(new JLabel("Nombre del archivo:"));
+        panel.add(campoNombre);
+        panel.add(new JLabel("Extensión (si no la escribes en el nombre):"));
+        panel.add(comboExtension);
+        int opcion = JOptionPane.showConfirmDialog(padre, panel, "Nuevo archivo",
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (opcion != JOptionPane.OK_OPTION) return null;
+        String nombre = campoNombre.getText().trim();
+        if (nombre.isEmpty()) return null;
+        if (!nombre.contains(".")) {
+            nombre = nombre + comboExtension.getSelectedItem();
+        }
+        return new File(carpeta, nombre);
     }
 
     private void nuevaCarpeta() {

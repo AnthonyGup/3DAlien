@@ -2,6 +2,8 @@ package cunoc.compi2.alien_code.ui;
 
 import java.awt.BorderLayout;
 import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JOptionPane;
@@ -52,7 +54,6 @@ public class VentanaPrincipal extends JFrame {
         menuBar.setOnNuevoArchivo(e -> crearNuevoArchivo(arbol));
         menuBar.setOnAbrirCarpeta(e -> abrirCarpetaProyecto());
         menuBar.setOnGuardar(e -> guardar(tabs));
-        menuBar.setOnGuardarComo(e -> guardarComo(tabs));
         menuBar.setOnDescargarProyecto(e -> descargarProyecto());
         menuBar.setOnSalir(e -> dispose());
         menuBar.setOnCompilar(e -> compilar(log));
@@ -70,7 +71,8 @@ public class VentanaPrincipal extends JFrame {
             JOptionPane.showMessageDialog(this, "Abre una carpeta de proyecto primero.");
             return;
         }
-        File archivo = new File(carpetaProyecto, "nuevo_" + (System.currentTimeMillis() % 10000) + ".y");
+        File archivo = PanelArbolProyecto.mostrarDialogoNuevoArchivo(this, carpetaProyecto);
+        if (archivo == null) return;
         try {
             if (archivo.createNewFile()) {
                 mainPanel.getEditorTabs().abrirArchivo(archivo);
@@ -98,26 +100,10 @@ public class VentanaPrincipal extends JFrame {
         EditorPanel editor = tabs.getEditorSeleccionado();
         if (editor == null) return;
         if (editor.getArchivo() == null) {
-            guardarComo(tabs);
+            JOptionPane.showMessageDialog(this, "No hay archivo asociado a esta pestaña.");
             return;
         }
         guardarEn(editor.getArchivo(), editor.getText());
-    }
-
-    private void guardarComo(PanelEditorTabs tabs) {
-        EditorPanel editor = tabs.getEditorSeleccionado();
-        if (editor == null) return;
-        JFileChooser chooser = new JFileChooser(carpetaProyecto);
-        chooser.setDialogTitle("Guardar como");
-        if (chooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
-            File destino = chooser.getSelectedFile();
-            guardarEn(destino, editor.getText());
-            editor.setArchivo(destino);
-            int idx = tabs.indexOfComponent(editor);
-            if (idx >= 0) {
-                tabs.setTitleAt(idx, destino.getName());
-            }
-        }
     }
 
     private void guardarEn(File archivo, String contenido) {
@@ -181,13 +167,41 @@ public class VentanaPrincipal extends JFrame {
 
     private void compilar(PanelLog log) {
         log.limpiar();
-        log.agregar("> Analizando léxico y sintáctico...");
-        log.agregar("> Análisis semántico...");
-        log.agregar("> Generando cuartetas...");
-        log.agregar("> Generando código C3D...");
-        log.agregar("> Generando código C...");
-        log.agregar("");
-        log.agregar("Compilación finalizada");
+        ventanaErrores.limpiar();
+
+        EditorPanel editor = mainPanel.getEditorTabs().getEditorSeleccionado();
+        if (editor == null) {
+            log.agregarError("No hay ninguna pesta\u00f1a abierta.");
+            return;
+        }
+
+        File archivo = editor.getArchivo();
+        VerificadorSintactico verificador = new VerificadorSintactico();
+        VerificadorSintactico.Resultado resultado = verificador.verificar(editor.getText(), archivo);
+
+        String nombreArchivo = archivo == null ? "(sin archivo)" : archivo.getName();
+        log.agregarInfo("> Compilando " + nombreArchivo + (resultado.extensionValida ? " (" + resultado.lenguaje + ")" : ""));
+
+        if (!resultado.extensionValida) {
+            log.agregarError("Extensi\u00f3n no reconocida. Usa .y, .z o .pig.");
+            return;
+        }
+
+        log.agregarInfo("> An\u00e1lisis l\u00e9xico: " + resultado.cantidadTokens + " tokens encontrados.");
+        log.agregarInfo("> An\u00e1lisis sint\u00e1ctico...");
+
+        if (resultado.hayErrores()) {
+            List<Object[]> filas = new ArrayList<>();
+            for (VerificadorSintactico.ErrorSintactico error : resultado.errores) {
+                log.agregarError("[Error sint\u00e1ctico] l\u00ednea " + error.linea + ", columna " + error.columna + ": " + error.mensaje);
+                filas.add(new Object[]{"Sint\u00e1ctico", error.mensaje, error.linea, error.columna});
+            }
+            ventanaErrores.setDatos(filas);
+            return;
+        }
+
+        log.agregarExito("Sin errores sint\u00e1cticos.");
+        log.agregarPendiente("> An\u00e1lisis sem\u00e1ntico, cuartetas, C3D y C: pendiente (backend en desarrollo).");
     }
 
     private void verCodigoC(PanelLog log) {

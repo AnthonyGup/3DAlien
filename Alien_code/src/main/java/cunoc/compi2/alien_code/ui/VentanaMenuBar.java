@@ -20,7 +20,6 @@ public class VentanaMenuBar extends JMenuBar {
         menuArchivo.add(item("Abrir carpeta de proyecto"));
         menuArchivo.addSeparator();
         menuArchivo.add(item("Guardar"));
-        menuArchivo.add(item("Guardar como"));
         menuArchivo.addSeparator();
         menuArchivo.add(item("Descargar proyecto (zip)"));
         menuArchivo.addSeparator();
@@ -73,9 +72,8 @@ public class VentanaMenuBar extends JMenuBar {
     public void setOnNuevoArchivo(ActionListener l) { anclar(0, l); }
     public void setOnAbrirCarpeta(ActionListener l) { anclar(1, l); }
     public void setOnGuardar(ActionListener l) { anclar(3, l); }
-    public void setOnGuardarComo(ActionListener l) { anclar(4, l); }
-    public void setOnDescargarProyecto(ActionListener l) { anclar(6, l); }
-    public void setOnSalir(ActionListener l) { anclar(8, l); }
+    public void setOnDescargarProyecto(ActionListener l) { anclar(5, l); }
+    public void setOnSalir(ActionListener l) { anclar(7, l); }
     public void setOnVerErrores(ActionListener l) { anclarReportes(0, l); }
     public void setOnVerSimbolos(ActionListener l) { anclarReportes(1, l); }
     public void setOnVerCuartetas(ActionListener l) { anclarReportes(2, l); }
