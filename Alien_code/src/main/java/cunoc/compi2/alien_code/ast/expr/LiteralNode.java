@@ -39,6 +39,13 @@ public class LiteralNode implements Node {
     }
     @Override
     public Type analizar(ContextoSemantico ctx) {
-        return null;
+        switch (clase) {
+            case ENTERO: return Type.INT;
+            case DECIMAL: return Type.FLOAT;
+            case CADENA: return Type.STRING;
+            case CARACTER: return Type.CHAR;
+            case BOOLEANO: return Type.BOOL;
+            default: return null;
+        }
     }
 }

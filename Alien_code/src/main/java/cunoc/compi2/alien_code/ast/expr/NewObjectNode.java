@@ -5,6 +5,7 @@ import cunoc.compi2.alien_code.ir.CodigoContexto;
 import cunoc.compi2.alien_code.ast.ASTVisitor;
 
 import cunoc.compi2.alien_code.ast.Node;
+import cunoc.compi2.alien_code.semantic.Symbol;
 
 import java.util.List;
 
@@ -39,6 +40,27 @@ public class NewObjectNode implements Node {
     }
     @Override
     public Type analizar(ContextoSemantico ctx) {
-        return null;
+        Symbol clase = ctx.resolver(nombreClase);
+        if (clase == null || clase.getKind() != Symbol.Kind.CLASE) {
+            ctx.registrarError(getLine(), getColumn(),
+                "'" + nombreClase + "' no es una clase conocida (¿falta un import .z?)");
+            for (Node argumento : argumentos) {
+                ctx.evaluar(argumento);
+            }
+            return null;
+        }
+        for (Node argumento : argumentos) {
+            ctx.evaluar(argumento);
+        }
+
+        boolean algunoCoincide = clase.getMiembros() != null
+            && clase.getMiembros().getTodos().stream()
+                .anyMatch(s -> s.getKind() == Symbol.Kind.CONSTRUCTOR && s.getSize() == argumentos.size());
+        if (!algunoCoincide) {
+            ctx.registrarError(getLine(), getColumn(),
+                "No existe un constructor de '" + nombreClase + "' con " + argumentos.size() + " argumento(s)");
+            return null;
+        }
+        return Type.CLASS;
     }
 }

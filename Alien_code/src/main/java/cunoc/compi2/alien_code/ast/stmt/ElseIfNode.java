@@ -41,6 +41,15 @@ public class ElseIfNode implements Node {
     }
     @Override
     public Type analizar(ContextoSemantico ctx) {
-        return null;
+        if (!esElse()) {
+            Type tipoCondicion = ctx.evaluar(condicion);
+            if (tipoCondicion != null && tipoCondicion != Type.BOOL) {
+                ctx.registrarError(getLine(), getColumn(), "La condición debe ser booleana, se dio " + tipoCondicion);
+            }
+        }
+        ctx.entrarAmbito();
+        ctx.evaluar(cuerpo);
+        ctx.salirAmbito();
+        return Type.VOID;
     }
 }

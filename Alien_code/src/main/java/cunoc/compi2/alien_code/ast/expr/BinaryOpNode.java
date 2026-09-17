@@ -5,6 +5,7 @@ import cunoc.compi2.alien_code.ir.CodigoContexto;
 import cunoc.compi2.alien_code.ast.ASTVisitor;
 
 import cunoc.compi2.alien_code.ast.Node;
+import cunoc.compi2.alien_code.semantic.TypeCompat;
 
 public class BinaryOpNode implements Node {
     public String operador;
@@ -39,6 +40,42 @@ public class BinaryOpNode implements Node {
     }
     @Override
     public Type analizar(ContextoSemantico ctx) {
-        return null;
+        Type izq = ctx.evaluar(izquierda);
+        Type der = ctx.evaluar(derecha);
+
+        switch (operador) {
+            case "+": case "-": case "*": case "/": {
+                Type resultado = TypeCompat.tipoAritmetico(izq, der);
+                if (resultado == null && izq != null && der != null) {
+                    ctx.registrarError(getLine(), getColumn(),
+                        "Operación '" + operador + "' inválida entre " + izq + " y " + der);
+                }
+                if (!operador.equals("+") && resultado == Type.STRING) {
+                    ctx.registrarError(getLine(), getColumn(),
+                        "El operador '" + operador + "' no aplica a cadenas");
+                    return null;
+                }
+                return resultado;
+            }
+            case "==": case "!=":
+                if (!TypeCompat.sonComparables(izq, der)) {
+                    ctx.registrarError(getLine(), getColumn(), "No se puede comparar " + izq + " con " + der);
+                }
+                return Type.BOOL;
+            case "<": case ">":
+                if (!TypeCompat.sonOrdenables(izq, der)) {
+                    ctx.registrarError(getLine(), getColumn(),
+                        "'" + operador + "' requiere tipos numéricos, se dio " + izq + " y " + der);
+                }
+                return Type.BOOL;
+            case "&&": case "||":
+                if ((izq != null && izq != Type.BOOL) || (der != null && der != Type.BOOL)) {
+                    ctx.registrarError(getLine(), getColumn(), "'" + operador + "' requiere operandos booleanos");
+                }
+                return Type.BOOL;
+            default:
+                ctx.registrarError(getLine(), getColumn(), "Operador desconocido: " + operador);
+                return null;
+        }
     }
 }

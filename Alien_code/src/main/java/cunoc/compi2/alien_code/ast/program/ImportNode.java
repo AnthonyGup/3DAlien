@@ -35,6 +35,6 @@ public class ImportNode implements Node {
     }
     @Override
     public Type analizar(ContextoSemantico ctx) {
-        return null;
+        return Type.VOID;
     }
 }

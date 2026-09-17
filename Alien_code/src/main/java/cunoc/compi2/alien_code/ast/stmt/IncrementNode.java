@@ -6,6 +6,7 @@ import cunoc.compi2.alien_code.ast.ASTVisitor;
 
 import cunoc.compi2.alien_code.ast.Node;
 import cunoc.compi2.alien_code.ast.expr.AccessNode;
+import cunoc.compi2.alien_code.semantic.TypeCompat;
 
 public class IncrementNode implements Node {
     public AccessNode objetivo;
@@ -36,6 +37,11 @@ public class IncrementNode implements Node {
     }
     @Override
     public Type analizar(ContextoSemantico ctx) {
-        return null;
+        Type tipo = ctx.evaluar(objetivo);
+        if (tipo != null && !TypeCompat.esNumerico(tipo)) {
+            ctx.registrarError(getLine(), getColumn(),
+                "++ solo se puede usar sobre valores numéricos, no " + tipo);
+        }
+        return tipo;
     }
 }

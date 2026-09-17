@@ -41,6 +41,17 @@ public class IfNode implements Node {
     }
     @Override
     public Type analizar(ContextoSemantico ctx) {
-        return null;
+        Type tipoCondicion = ctx.evaluar(condicion);
+        if (tipoCondicion != null && tipoCondicion != Type.BOOL) {
+            ctx.registrarError(getLine(), getColumn(), "La condición debe ser booleana, se dio " + tipoCondicion);
+        }
+        ctx.entrarAmbito();
+        ctx.evaluar(cuerpo);
+        ctx.salirAmbito();
+
+        for (ElseIfNode rama : ramas) {
+            ctx.evaluar(rama);
+        }
+        return Type.VOID;
     }
 }

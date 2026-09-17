@@ -33,6 +33,9 @@ public class ContinueNode implements Node {
     }
     @Override
     public Type analizar(ContextoSemantico ctx) {
-        return null;
+        if (!ctx.enCiclo()) {
+            ctx.registrarError(getLine(), getColumn(), "'perge' solo puede usarse dentro de un ciclo");
+        }
+        return Type.VOID;
     }
 }

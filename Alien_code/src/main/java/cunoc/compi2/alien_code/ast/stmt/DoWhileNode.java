@@ -37,6 +37,16 @@ public class DoWhileNode implements Node {
     }
     @Override
     public Type analizar(ContextoSemantico ctx) {
-        return null;
+        ctx.entrarCiclo();
+        ctx.entrarAmbito();
+        ctx.evaluar(cuerpo);
+        ctx.salirAmbito();
+        ctx.salirCiclo();
+
+        Type tipoCondicion = ctx.evaluar(condicion);
+        if (tipoCondicion != null && tipoCondicion != Type.BOOL) {
+            ctx.registrarError(getLine(), getColumn(), "La condición de 'dum' debe ser booleana, se dio " + tipoCondicion);
+        }
+        return Type.VOID;
     }
 }

@@ -6,6 +6,7 @@ import cunoc.compi2.alien_code.ast.ASTVisitor;
 
 import cunoc.compi2.alien_code.ast.Node;
 import cunoc.compi2.alien_code.ast.expr.AccessNode;
+import cunoc.compi2.alien_code.semantic.TypeCompat;
 
 public class ReadNode implements Node {
     public AccessNode destino;
@@ -36,6 +37,14 @@ public class ReadNode implements Node {
     }
     @Override
     public Type analizar(ContextoSemantico ctx) {
-        return null;
+        if (destino != null) {
+            Type tipoDestino = ctx.evaluar(destino);
+            if (tipoDestino != null && tipoDestino != Type.STRING
+                    && !TypeCompat.esNumerico(tipoDestino) && tipoDestino != Type.CHAR) {
+                ctx.registrarError(getLine(), getColumn(),
+                    "No se puede leer directamente hacia una variable de tipo " + tipoDestino);
+            }
+        }
+        return Type.STRING;
     }
 }

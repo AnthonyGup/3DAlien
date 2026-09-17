@@ -38,6 +38,9 @@ public class BlockNode implements Node {
     }
     @Override
     public Type analizar(ContextoSemantico ctx) {
-        return null;
+        for (Node sentencia : sentencias) {
+            ctx.evaluar(sentencia);
+        }
+        return Type.VOID;
     }
 }

@@ -37,6 +37,9 @@ public class ProgramNode implements Node {
     }
     @Override
     public Type analizar(ContextoSemantico ctx) {
-        return null;
+        for (Node declaracion : declarations) {
+            ctx.evaluar(declaracion);
+        }
+        return Type.VOID;
     }
 }

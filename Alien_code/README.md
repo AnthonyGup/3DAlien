@@ -65,10 +65,6 @@ Alien_code/
 │   ├── errors/      # Manejo de errores
 │   ├── ui/          # Swing: editor, resaltado, consola, pipeline
 │   └── Alien_code.java
-└── src/test/java/cunoc/compi2/alien_code/
-    ├── ylang/grammar/YLangGrammarTest.java
-    ├── zetariano/grammar/ZetarianoGrammarTest.java
-    └── semantic/SemanticAnalyzerTest.java
 ```
 
 ## Compilar y ejecutar
@@ -77,10 +73,7 @@ Alien_code/
 # Generar fuentes ANTLR y compilar
 mvn clean compile
 
-# Ejecutar pruebas
-mvn test
-
-# Ejecutar la aplicación gráfica
+# Ejecutar la aplicación gráfica (aquí se prueba todo)
 mvn exec:java
 ```
 

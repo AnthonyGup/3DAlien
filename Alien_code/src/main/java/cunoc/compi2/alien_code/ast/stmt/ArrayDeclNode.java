@@ -5,6 +5,8 @@ import cunoc.compi2.alien_code.ast.ASTVisitor;
 
 import cunoc.compi2.alien_code.ast.Node;
 import cunoc.compi2.alien_code.ast.Type;
+import cunoc.compi2.alien_code.semantic.Symbol;
+import cunoc.compi2.alien_code.semantic.TypeCompat;
 
 import java.util.List;
 
@@ -45,6 +47,28 @@ public class ArrayDeclNode implements Node {
     }
     @Override
     public Type analizar(ContextoSemantico ctx) {
-        return null;
+        if (iniciales != null && !iniciales.isEmpty()) {
+            if (iniciales.size() != tamano) {
+                ctx.registrarError(getLine(), getColumn(),
+                    "El arreglo declara tamaño " + tamano + " pero el inicializador tiene "
+                    + iniciales.size() + " elementos");
+            }
+            for (Node valor : iniciales) {
+                Type tipoValor = ctx.evaluar(valor);
+                if (!TypeCompat.esAsignable(tipo, tipoValor)) {
+                    ctx.registrarError(valor.getLine(), valor.getColumn(),
+                        "Elemento de tipo " + tipoValor + " no es compatible con arreglo de " + tipo);
+                }
+            }
+        }
+
+        Symbol simbolo = new Symbol(nombre, tipo, Symbol.Kind.VARIABLE, true, false, false, tamano);
+        if (tipo == Type.STRUCT || tipo == Type.CLASS) {
+            simbolo.setTipoNombre(tipoNombre);
+        }
+        if (!ctx.definir(simbolo)) {
+            ctx.registrarError(getLine(), getColumn(), "El arreglo '" + nombre + "' ya fue declarado");
+        }
+        return tipo;
     }
 }

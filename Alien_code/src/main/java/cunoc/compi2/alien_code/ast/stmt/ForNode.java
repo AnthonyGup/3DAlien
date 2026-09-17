@@ -41,6 +41,21 @@ public class ForNode implements Node {
     }
     @Override
     public Type analizar(ContextoSemantico ctx) {
-        return null;
+        ctx.entrarAmbito();
+        if (inicial != null) ctx.evaluar(inicial);
+
+        if (condicion != null) {
+            Type tipoCondicion = ctx.evaluar(condicion);
+            if (tipoCondicion != null && tipoCondicion != Type.BOOL) {
+                ctx.registrarError(getLine(), getColumn(), "La condición de 'per' debe ser booleana, se dio " + tipoCondicion);
+            }
+        }
+        if (paso != null) ctx.evaluar(paso);
+
+        ctx.entrarCiclo();
+        ctx.evaluar(cuerpo);
+        ctx.salirCiclo();
+        ctx.salirAmbito();
+        return Type.VOID;
     }
 }

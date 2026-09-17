@@ -6,6 +6,7 @@ import cunoc.compi2.alien_code.ast.ASTVisitor;
 
 import cunoc.compi2.alien_code.ast.Node;
 import cunoc.compi2.alien_code.ast.expr.AccessNode;
+import cunoc.compi2.alien_code.semantic.TypeCompat;
 
 public class AssignmentNode implements Node {
     public AccessNode destino;
@@ -38,6 +39,12 @@ public class AssignmentNode implements Node {
     }
     @Override
     public Type analizar(ContextoSemantico ctx) {
-        return null;
+        Type tipoDestino = ctx.evaluar(destino);
+        Type tipoValor = ctx.evaluar(valor);
+        if (!TypeCompat.esAsignable(tipoDestino, tipoValor)) {
+            ctx.registrarError(getLine(), getColumn(),
+                "No se puede asignar " + tipoValor + " a " + tipoDestino);
+        }
+        return tipoDestino;
     }
 }

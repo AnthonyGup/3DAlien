@@ -37,6 +37,9 @@ public class PrintNode implements Node {
     }
     @Override
     public Type analizar(ContextoSemantico ctx) {
-        return null;
+        for (Node expresion : expresiones) {
+            ctx.evaluar(expresion);
+        }
+        return Type.VOID;
     }
 }

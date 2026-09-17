@@ -5,6 +5,9 @@ import cunoc.compi2.alien_code.ast.ASTVisitor;
 
 import cunoc.compi2.alien_code.ast.Node;
 import cunoc.compi2.alien_code.ast.Type;
+import cunoc.compi2.alien_code.ast.expr.StructLiteralNode;
+import cunoc.compi2.alien_code.semantic.Symbol;
+import cunoc.compi2.alien_code.semantic.TypeCompat;
 
 public class VariableDeclNode implements Node {
     public String nombre;
@@ -41,6 +44,31 @@ public class VariableDeclNode implements Node {
     }
     @Override
     public Type analizar(ContextoSemantico ctx) {
-        return null;
+        if (tipo == Type.STRUCT || tipo == Type.CLASS) {
+            Symbol tipoSimbolo = ctx.resolver(tipoNombre);
+            if (tipoSimbolo == null) {
+                ctx.registrarError(getLine(), getColumn(),
+                    "Tipo desconocido '" + tipoNombre + "' (¿falta un import?)");
+            } else if (inicial instanceof StructLiteralNode) {
+                ((StructLiteralNode) inicial).validarContra(tipoSimbolo, ctx);
+            } else if (inicial != null) {
+                ctx.evaluar(inicial);
+            }
+        } else if (inicial != null) {
+            Type tipoInicial = ctx.evaluar(inicial);
+            if (!TypeCompat.esAsignable(tipo, tipoInicial)) {
+                ctx.registrarError(getLine(), getColumn(),
+                    "No se puede asignar " + tipoInicial + " a variable de tipo " + tipo);
+            }
+        }
+
+        Symbol simbolo = new Symbol(nombre, tipo, Symbol.Kind.VARIABLE, false, false, false, 0);
+        if (tipo == Type.STRUCT || tipo == Type.CLASS) {
+            simbolo.setTipoNombre(tipoNombre);
+        }
+        if (!ctx.definir(simbolo)) {
+            ctx.registrarError(getLine(), getColumn(), "La variable '" + nombre + "' ya fue declarada");
+        }
+        return tipo;
     }
 }

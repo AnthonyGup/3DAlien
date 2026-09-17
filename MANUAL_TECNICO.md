@@ -18,8 +18,9 @@ deben respetarse.
 
 Reglas para quien genere planes:
 
-1. **Un plan por fase** debe terminar con `mvn -B test` en verde (hoy **24 pruebas**,
-   0 fallos).
+1. **Un plan por fase** debe terminar compilando (`mvn -B clean compile`). La verificación
+   funcional se hace **desde el frontend** (la GUI), no con pruebas automatizadas: el
+   proyecto **no tiene tests**.
 2. Todo plan debe enumerar, para cada archivo a tocar: ruta, qué cambiar y por qué.
 3. Todo plan debe respetar las convenciones de la sección 17 (sin comentarios en
    código, idioma de los nombres, columnas base 1, etc.).
@@ -219,7 +220,6 @@ Resumen operativo (lo que la gramática ANTLR del proyecto implementa):
 | Java | 21 (`maven.compiler.release=21`) | Lenguaje de implementación |
 | ANTLR | 4.13.1 | Lexers, parsers y visitantes (`visitor=true`, `listener=true`) |
 | RSyntaxTextArea | 3.3.4 | Editor con resaltado |
-| JUnit Jupiter | 5.10.2 | Pruebas (scope `test`) |
 
 `pom.xml` (raíz del módulo `Alien_code`):
 - `groupId=cunoc.compi2`, `artifactId=Alien_code`, `packaging=jar`.
@@ -233,9 +233,7 @@ Comandos:
 
 ```
 mvn -B clean compile        # regenera ANTLR + compila
-mvn -B test                 # 24 pruebas
-mvn -B test -Dtest=Clase    # una suite
-mvn exec:java               # arranca la GUI
+mvn exec:java               # arranca la GUI (aquí se prueba todo)
 ```
 
 ---
@@ -273,9 +271,10 @@ mvn exec:java               # arranca la GUI
 │           │   ├── ContextoSemantico.java            # interfaz
 │           │   ├── ContextoSemanticoImpl.java
 │           │   ├── SemanticAnalyzer.java             # Pase A + Pase B
-│           │   ├── Symbol.java                       # + Kind
-│           │   ├── Scope.java
-│           │   └── SymbolTable.java
+│           │   ├── Symbol.java                       # + Kind, tipoNombre, miembros
+│           │   ├── Scope.java                        # LinkedHashMap + orden
+│           │   ├── SymbolTable.java
+│           │   └── TypeCompat.java                   # reglas de compatibilidad de tipos
 │           ├── pigLatin/astbuilder/PigLatinASTBuilder.java
 │           ├── pigLatin/semantic/PigLatinVocabulary.java
 │           ├── ylang/astbuilder/YLangASTBuilder.java           # esqueleto
@@ -291,13 +290,12 @@ mvn exec:java               # arranca la GUI
 │                          EditorPanel, PanelLog, VerificadorSintactico,
 │                          ProyectoTokenMakerFactory, PigLatinTokenMaker,
 │                          YLangTokenMaker, ZetarianoTokenMaker
-│       └── test/java/cunoc/compi2/alien_code/
-│           ├── ylang/grammar/YLangGrammarTest.java              # 10 casos
-│           ├── zetariano/grammar/ZetarianoGrammarTest.java       # 10 casos
-│           └── semantic/SemanticAnalyzerTest.java                # 4 casos
 └── (docs del curso fuera del repo: Downloads\*_Especificacion.md, Zetariano.g4,
     Correccion_AST_Unificado_y_Merge.md)
 ```
+
+No existe `src/test`: las pruebas se hacen **manualmente desde la GUI**. No se agregan
+tests automatizados.
 
 NOTA: NO existen paquetes `pigLatin.ast`, `ylang.ast` ni `zetariano.ast`: fueron eliminados
 en la corrección. Todo import de nodos es `cunoc.compi2.alien_code.ast.*`.
@@ -316,7 +314,7 @@ public interface Node {
     String traducir(CodigoContexto ctx);   // generación de cuartetas (HOY return null)
     int getLine();                          // línea base 1
     int getColumn();                        // columna base 1
-    Type analizar(ContextoSemantico ctx);   // semántica (HOY return null)
+    Type analizar(ContextoSemantico ctx);   // semántica (23 nodos hechos; `decl` stub)
 }
 ```
 
@@ -358,8 +356,9 @@ Interfaz con un método por tipo de nodo. Todos son `default` y devuelven `null`
 ## 7. Nodos del AST — referencia de campos y constructores
 
 Convención: campos públicos (POJO), línea/columna `final private` con getters. Cada nodo
-implementa `accept` (con su `visit...`), `getLine`, `getColumn`, `traducir` (`return null`)
-y `analizar` (`return null`). **Los 29 nodos tienen `traducir`/`analizar` como stub.**
+implementa `accept` (con su `visit...`), `getLine` y `getColumn`. `traducir` **sigue como
+stub** (`return null`) en todos. `analizar` está implementado en los nodos de la fase
+semántica de Pig Latin (ver 8.7–8.8); en `decl` sigue stub.
 
 ### 7.1 `program`
 
@@ -459,13 +458,24 @@ public class Symbol {
     public String getName();  public Type getType();  public Kind getKind();
     public boolean isArray(); public boolean isParameter(); public boolean isField();
     public int getSize();  // arreglo → tamaño; struct/función/clase → nº de campos/params/atributos
+
+    // Adiciones de la fase semántica (no rompen el constructor ni las llamadas existentes):
+    public String getTipoNombre(); public void setTipoNombre(String tipoNombre);
+    public Scope getMiembros();   public void setMiembros(Scope miembros);
 }
 ```
 
+`tipoNombre` guarda el nombre real cuando `type` es `STRUCT`/`CLASS` (si no, `null`).
+`miembros` es el `Scope` con los campos/métodos/constructores, adjuntado por
+`SemanticAnalyzer.paseA` solo a los símbolos `ESTRUCTURA`/`CLASE`.
+
 ### 8.2 `Scope`
 
-Ámbito con padre y `Map<String,Symbol>`. `define`, `contains`, `resolve` (recorre padres),
-`getParent()`, `getTodos()` (los símbolos locales del ámbito, para reportes).
+Ámbito con padre y `Map<String,Symbol>` (`LinkedHashMap`). `define` inserta en el mapa y
+además agrega a una lista `orden`, de modo que `getTodos()` devuelve los símbolos **en
+orden de declaración** y **conserva los duplicados** por nombre (necesario para los
+constructores, que comparten el nombre de la clase). `getTodos()` es la base de
+`StructLiteralNode.validarContra` y del filtro de constructores en `NewObjectNode`.
 
 ### 8.3 `SymbolTable`
 
@@ -505,13 +515,17 @@ public class SemanticAnalyzer {
 }
 ```
 
-`paseA` → para cada `programa.declarations`, `registrarFirma(nodo)`:
-- `StructDeclNode`: define `(nombre, STRUCT, ESTRUCTURA, size=campos.size)`; entra ámbito;
-  define cada campo `(campo.nombre, campo.tipo, VARIABLE, isField=true)`; sale.
+`paseA` → para cada `programa.declarations`, `registrarFirma(nodo)`. **Los miembros ya no se
+descartan:** se construye un `Scope` propio (padre `null`), se define ahí cada miembro y el
+`Scope` queda adjunto al símbolo con `setMiembros(...)`:
+- `StructDeclNode`: define `(nombre, STRUCT, ESTRUCTURA, size=campos.size)`; crea el `Scope`
+  de miembros; define cada campo `(campo.nombre, campo.tipo, VARIABLE, isField=true)` con
+  `setTipoNombre` si el campo es `STRUCT`/`CLASS`; `simbolo.setMiembros(scope)`.
 - `FunctionDeclNode`: define `(nombre, retorno ?? VOID, FUNCION, size=parametros.size)`.
-- `ClassDeclNode`: define `(nombre, CLASS, CLASE, size=atributos.size)`; entra ámbito;
-  define atributos (VARIABLE, isField), métodos `(nombre, retorno, METODO)` y
-  constructores `(clase.nombre, VOID, CONSTRUCTOR, size=parametros.size)`; sale.
+- `ClassDeclNode`: define `(nombre, CLASS, CLASE, size=atributos.size)`; crea el `Scope` de
+  miembros; define atributos (VARIABLE, isField), métodos `(nombre, retorno, METODO)` y
+  constructores `(clase.nombre, VOID, CONSTRUCTOR, size=parametros.size)`;
+  `simbolo.setMiembros(scope)`.
 
 `paseB` → `programa.analizar(contexto)` para cada programa (los bodies ya pueden resolver).
 
@@ -522,22 +536,45 @@ que delega en `Type.from<Idioma>`. Son la única duplicación legítima.
 
 ### 8.7 Estado semántico
 
-- **Hecho:** esqueleto de tabla + ámbitos + Pase A (firmas, probado por
-  `SemanticAnalyzerTest`). `ContextoSemanticoImpl.registrarError` ya emite
-  `ErrorType.SEMANTICO`.
-- **Pendiente (el grueso de la semántica):** implementar `analizar(ContextoSemantico)` en
-  **los 29 nodos** (hoy devuelven `null`). Alcance acordado a cubrir en fases: verificar
-  variables/arreglos (declaradas y usadas, bounds con literal), asignaciones e
-  incremento/decremento contra el tipo del destino, tipado de expresiones
-  (`BinaryOpNode`/`UnaryOpNode`), condiciones booleanas, `romper`/`continuar` solo dentro
-  de ciclos (`enCiclo()`), validar llamadas contra las firmas registradas en Pase A
-  (nombre, nº y tipos de argumentos, retorno), structs (literales posicionales vs. campos),
-  clases/objetos (atributos, métodos, constructores en `new`), y built-ins
-  `imprimir`/`leer`/`System.out.println` (decisión del plan).
-- [ ] **PENDIENTE**: definir la **tabla de compatibilidad/conversión de tipos** entre
-      primitivos (`INT`/`FLOAT`/`STRING`/`BOOL`/`CHAR`). El spec referencia
-      `tabla_compatibilidad_tipos.md` que NO está en el repo; el plan debe definirla
-      (conversiones implícitas permitidas, reglas de operadores).
+- **Hecho (fase semántica Pig Latin, spec `Semantico_PigLatin_v2.md`):**
+  - `TypeCompat` creado en `semantic/` (compatibilidad/asignabilidad, aritmética,
+    comparación y orden).
+  - `Symbol` extendido con `tipoNombre`/`miembros`; `Scope` con orden de declaración.
+  - `SemanticAnalyzer.paseA` adjunta el `Scope` de miembros a cada `ESTRUCTURA`/`CLASE`.
+  - `analizar(ContextoSemantico)` implementado en **23 nodos** (raíz, `stmt` y `expr`;
+    ver 8.8). Los campos/`traducir` siguen igual.
+  - Regla transversal: `null` = "tipo desconocido, error ya reportado" → se propaga sin
+    generar un segundo error.
+- **Pendiente:**
+  - `analizar()` en los nodos `decl` (`StructDeclNode`, `FunctionDeclNode`,
+    `ClassDeclNode`, `MethodDeclNode`, `ConstructorDeclNode`, `ParameterNode`): sin esto
+    los **cuerpos de funciones/métodos no se analizan**.
+  - Validación de firmas por **tipos** (no solo cantidad): requiere `List<Type>
+    tiposParametros` en `Symbol` para `FUNCION`/`METODO`.
+  - Built-ins `imprimir`/`leer` en Y? (para Pig Latin van por `PrintNode`/`ReadNode`).
+  - Alcance semántico para árboles de Y? y Zetariano (sus builders están esqueleto).
+- La tabla de compatibilidad de tipos (antes "pendiente") ahora vive en
+  `semantic/TypeCompat`: único ensanchamiento `INT`→`FLOAT`; `+` sobre `STRING` concatena;
+  comparación `==`/`!=` admite iguales o numéricos; `<`/`>` solo numéricos.
+
+### 8.8 Nodos con `analizar()` implementado (fase Pig Latin)
+
+| Grupo | Nodos |
+|---|---|
+| Raíz | `ProgramNode`, `ImportNode`, `BlockNode` |
+| Declaraciones | `VariableDeclNode`, `ArrayDeclNode`, `StructLiteralNode` (+ `validarContra(Symbol,ContextoSemantico)`) |
+| Expresiones | `LiteralNode`, `BinaryOpNode`, `UnaryOpNode`, `AccessNode`, `NewObjectNode` |
+| Sentencias | `AssignmentNode`, `IncrementNode`, `DecrementNode`, `IfNode`, `ElseIfNode`, `WhileNode`, `DoWhileNode`, `ForNode`, `BreakNode`, `ContinueNode`, `PrintNode`, `ReadNode` |
+
+Patrón general por nodo: se documenta el tipo declarado del destino/símbolo, se
+resuelven/reportan errores y se registra el símbolo con `ctx.definir`. Para conocer el tipo
+de un hijo se usa `ctx.evaluar(hijo)` (equivale a `hijo.analizar(ctx)`).
+
+**Limitaciones conocidas (seguir en fases posteriores):** los cuerpos de
+funciones/métodos no se analizan (nodos `decl` stub); las llamadas a función/método solo
+verifican que existan, no la firma completa; la compatibilidad de `STRUCT`/`CLASS` que
+llega como resultado de un `AccessNode` compara solo el `Type` (no el nombre), porque
+`Type` es un enum plano.
 
 ---
 
@@ -743,30 +780,22 @@ crear lexer+parser, adjuntar `BaseErrorListener` que suma a `errores` (columna+1
 
 ---
 
-## 14. Pruebas automatizadas (referencia y patrón)
+## 14. Verificación (por frontend)
 
-**Estado: 24 pruebas, 0 fallos.** `mvn -B test`.
+**El proyecto no tiene pruebas automatizadas.** `src/test` fue eliminado y JUnit ya no está
+en `pom.xml`. La verificación de cada fase se hace **manualmente desde la GUI**:
 
-1. `ylang/grammar/YLangGrammarTest` (10): programa mínimo, programa completo, `sino`/
-   `contrario`, ciclos anidados con comentarios, `++`/`--`, EOF sin salto final, balance
-   INDENT/DEDENT, `%funciones` obligatoria, `<=`/`>=` no existen, dedent inconsistente
-   = error.
-2. `zetariano/grammar/ZetarianoGrammarTest` (10): clase vacía, programa completo con todas
-   las construcciones, cuerpo sin llaves, `public class` obligatorio (2 casos), `;`
-   obligatorio, EOF sin salto final, tokenización `NUMERO`/`DECIMAL`, arreglo
-   multidimensional, literal de arreglo.
-3. `semantic/SemanticAnalyzerTest` (4): Pase A registra firmas de struct/función/clase
-   (y métodos NO visibles en scope global), símbolo inexistente → null, dos programas
-   comparten tabla global, sin errores en programa vacío.
+1. `mvn -B clean compile` (debe compilar sin errores).
+2. `mvn exec:java` → abrir/crear un proyecto, escribir archivos `.pig`/`.y`/`.z` reales.
+3. Pulsar **Compilar** y revisar el panel de log, la tabla de símbolos, los errores y
+   (cuando existan) los reportes de cuartetas/C3D/código C.
 
-Patrón de prueba por fase sugerido (para que el plan los incluya):
-- **GrammarTest**: parse de un archivo completo + asserts de tokens.
-- **ASTBuilderTest** (nuevo paquete): `construir(codigo)` → asserts sobre campos del árbol
-  (tabla a crear en fases de builders).
-- **SemanticTest** (ampliar `semantic/`): construir árbol a mano y analizar → asserts de
-  errores/ausencia.
-- **IRTest / C3DTest / CTest** (futuro): `traducir` → cuartetas esperadas; `generate` →
-  C3D; C.
+Recomendación para los planes: incluir un **caso de prueba manual** por fase (archivos de
+entrada concretos y el resultado esperado en la GUI) en lugar de tests.
+
+Casos manuales que ya deben funcionar (fase semántica Pig Latin): variable no declarada,
+asignación de tipo incompatible, condición no booleana, `interrumpe`/`perge` fuera de
+ciclo, y literal de estructura con número/tipo de campos incorrectos.
 
 ---
 
@@ -774,15 +803,16 @@ Patrón de prueba por fase sugerido (para que el plan los incluya):
 
 | Componente | Estado |
 |---|---|
-| Corrección de arquitectura (AST/semántica unificados) | Aplicada, compila, 24 pruebas verdes |
+| Corrección de arquitectura (AST/semántica unificados) | Aplicada y compilando |
 | Gramática Pig Latin | Terminada |
 | Gramática Y? (INDENT/DEDENT) | Terminada y probada (10) |
 | Gramática Zetariano (real) | Terminada y probada (10) |
 | AST unificado (29 clases) + `decl/` | Terminado |
 | `PigLatinASTBuilder` | Terminado (emite `ast.*`) |
 | `YLangASTBuilder` / `ZetarianoASTBuilder` | Esqueletos (`construir` → null) |
-| Pase A (firmas) + Pase B (esqueleto) | Pase A probado; Pase B = `programa.analizar` (stub) |
-| `Node.analizar` (29 nodos) | Stub (`return null`) |
+| Pase A (firmas + miembros en `Symbol`) + Pase B | Operativos; Pase B analiza los 23 nodos de Pig Latin |
+| `Node.analizar` | Implementado en 23 nodos (fase Pig Latin); `decl` sigue stub |
+| `TypeCompat` / `Symbol.tipoNombre,miembros` / `Scope` ordenado | Terminados |
 | `Node.traducir` (29 nodos) | Stub (`return null`) |
 | `C3DGenerator.generate` | Vacío |
 | `CCodeGenerator.generate` | Solo cabeceras |
@@ -794,8 +824,7 @@ Patrón de prueba por fase sugerido (para que el plan los incluya):
 
 ## 16. Pendientes priorizados y dependencias (entrada para las fases)
 
-Orden recomendado de fases (cada una debe terminar con build+test en verde y,
-idealmente, incrementar pruebas):
+Orden recomendado de fases (cada una debe terminar compilando y verificada desde la GUI):
 
 1. **P1 — Alineamiento de tipos y dims del AST** (sin lógica nueva):
    - Alinear `Type.fromYLang` (`flotante/cadena/bool`).
@@ -804,12 +833,15 @@ idealmente, incrementar pruebas):
 2. **P2 — Nodos faltantes por decisión** (gap 1–6): `ReturnNode`, `SwitchNode` (o desugar),
    `ConditionalNode`, `Clase.NULO`, arr‑new, desugar de `+=`; registrar en `ASTVisitor`.
    *Depende de P1 (dims si switch/arr‑new los necesitan).*
-3. **P3 — `YLangASTBuilder`** completo (vitando P1/P2) + `ASTBuilderTest` para Y?.
-4. **P4 — `ZetarianoASTBuilder`** completo + tests.
-5. **P5 — Semántica por nodo** (29 `analizar`): variables/arreglos/asignación/expresiones/
-   condiciones/romper/continuar/llamadas a firmas del Pase A/structs/clases/built-ins +
-   tabla de compatibilidad de tipos + ampliar `SemanticAnalyzerTest`. *Depende de P1–P4
-   (tiene que analizar árboles reales de los 3 lenguajes).*
+3. **P3 — `YLangASTBuilder`** completo (vitando P1/P2) + caso manual en la GUI.
+4. **P4 — `ZetarianoASTBuilder`** completo + caso manual en la GUI.
+5. **P5 — Semántica (HECHA en Pig Latin; falta extenderla)**:
+   - Hecho (spec `Semantico_PigLatin_v2.md`): `TypeCompat`, `Symbol` (`tipoNombre`/
+     `miembros`), `Scope` ordenado, `paseA` con miembros en el `Symbol`, y `analizar()` en
+     23 nodos; verificada desde la GUI.
+   - Pendiente: `analizar()` en los nodos `decl` (cuerpos de funciones/métodos), firmas por
+     tipos (`Symbol.tiposParametros`), built-ins de Y? y el alcance de Y?/Zetariano.
+     *Depende de P3/P4 para tener árboles reales de esos lenguajes.*
 6. **P6 — Conectar UI**: verificación sintáctica previa para imports (robustez), llenar
    `ventanaErrores` desde semántica, y (con P7) cuartetas/C3D/C.
 7. **P7 — Cuartetas**: implementar `traducir` en los nodos + `IntermediateCodeGenerator` +
@@ -819,8 +851,9 @@ idealmente, incrementar pruebas):
    *Depende de P8.*
 
 Otros pendientes registrados: validar nombre de archivo == clase (Zetariano), Pase A
-recursivo a imports‑de‑imports, `tabla_compatibilidad_tipos.md`, y decidir el C destino
-de structs/clases.
+recursivo a imports‑de‑imports, múltiples constructores con el mismo nombre (hoy
+`getTodos()` conserva los duplicados, pero `resolve(nombre)` solo ve el último), y decidir
+el C destino de structs/clases.
 
 ---
 
@@ -842,8 +875,8 @@ de structs/clases.
    interfaz pública.
 7. **Decisiones abiertas** (gaps 7.5, tabla de compatibilidad, C destino, desugar de
    `+=`, etc.) deben decidirse en el plan y quedar documentadas ahí, no en el código.
-8. **Resultado de aceptación de cada fase:** `mvn -B test` verde (nunca bajar de 24) +
-   pruebas nuevas para lo agregado (patrón sección 14).
+8. **Resultado de aceptación de cada fase:** `mvn -B clean compile` sin errores + caso
+   manual verificado en la GUI (sección 14). No agregar tests automatizados.
 9. `mvn -B clean compile` regenera ANTLR: los planes no deben editar los fuentes
    generados en `target/generated-sources/antlr4`.
 10. La carpeta de trabajo del build es `Alien_code/` (donde está `pom.xml`).
@@ -855,10 +888,9 @@ de structs/clases.
 - El diseño original triplicaba `ast`, `semantic` y análisis por idioma + una etapa
   "Merge". La corrección (ver sección 2 y el MD en Downloads) lo unificó y ya está
   aplicada al código. **No revertirla.**
-- La prueba `SemanticAnalyzerTest.paseARegistraFirmasDeStructFuncionYClase` espera que los
-  métodos de una clase NO sean visibles desde el scope global (`assertNull(tabla.resolve(
-  "mover"))`): si un plan cambia la visibilidad del Pase A, debe actualizar esta prueba a
-  propósito.
+- Decisión de alcance fijada en el Pase A: los métodos de una clase **NO** son visibles
+  desde el scope global (se resuelven solo a través de `Symbol.getMiembros()`). No cambiar
+  esa visibilidad sin justificarlo.
 
 ---
 
