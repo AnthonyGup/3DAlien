@@ -1,5 +1,11 @@
 package cunoc.compi2.alien_code.ast;
 
+import cunoc.compi2.alien_code.ast.decl.ClassDeclNode;
+import cunoc.compi2.alien_code.ast.decl.ConstructorDeclNode;
+import cunoc.compi2.alien_code.ast.decl.FunctionDeclNode;
+import cunoc.compi2.alien_code.ast.decl.MethodDeclNode;
+import cunoc.compi2.alien_code.ast.decl.ParameterNode;
+import cunoc.compi2.alien_code.ast.decl.StructDeclNode;
 import cunoc.compi2.alien_code.ast.expr.AccessNode;
 import cunoc.compi2.alien_code.ast.expr.BinaryOpNode;
 import cunoc.compi2.alien_code.ast.expr.LiteralNode;
@@ -51,4 +57,11 @@ public interface ASTVisitor<T> {
     default T visitLiteral(LiteralNode node) { return null; }
     default T visitBinaryOp(BinaryOpNode node) { return null; }
     default T visitUnaryOp(UnaryOpNode node) { return null; }
+
+    default T visitStructDecl(StructDeclNode node) { return null; }
+    default T visitFunctionDecl(FunctionDeclNode node) { return null; }
+    default T visitClassDecl(ClassDeclNode node) { return null; }
+    default T visitConstructorDecl(ConstructorDeclNode node) { return null; }
+    default T visitMethodDecl(MethodDeclNode node) { return null; }
+    default T visitParameter(ParameterNode node) { return null; }
 }

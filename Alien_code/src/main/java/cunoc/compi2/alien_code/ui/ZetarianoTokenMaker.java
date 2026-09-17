@@ -6,14 +6,14 @@ import org.fife.ui.rsyntaxtextarea.AbstractTokenMaker;
 import org.fife.ui.rsyntaxtextarea.Token;
 import org.fife.ui.rsyntaxtextarea.TokenMap;
 import org.fife.ui.rsyntaxtextarea.TokenTypes;
-import cunoc.compi2.alien_code.grammar.ZetarianoLexer;
+import cunoc.compi2.alien_code.zetariano.grammar.ZetarianoLexer;
 
 public class ZetarianoTokenMaker extends AbstractTokenMaker {
 
     private static final String[] RESERVADAS = {
-        "numerus", "numerusdecimalis", "verbum", "verum", "littera", "vacuum",
-        "classis", "heredis", "si", "aliter", "sinon", "dum", "pro", "fac",
-        "redden", "scribe", "cape", "falsum", "novo", "rumpe", "perge"
+        "class", "public", "void", "new", "null", "true", "false",
+        "if", "else", "switch", "case", "default", "break", "continue",
+        "for", "while", "do", "return", "int", "double", "char", "boolean", "String"
     };
 
     @Override
@@ -64,18 +64,15 @@ public class ZetarianoTokenMaker extends AbstractTokenMaker {
     private int mapearTipo(org.antlr.v4.runtime.Token token) {
         int tipo = token.getType();
         switch (tipo) {
-            case ZetarianoLexer.LITERAL_ENTERO:
+            case ZetarianoLexer.NUMERO:
                 return TokenTypes.LITERAL_NUMBER_DECIMAL_INT;
-            case ZetarianoLexer.LITERAL_DECIMAL:
+            case ZetarianoLexer.DECIMAL:
                 return TokenTypes.LITERAL_NUMBER_FLOAT;
-            case ZetarianoLexer.LITERAL_CADENA:
+            case ZetarianoLexer.CADENA:
                 return TokenTypes.LITERAL_STRING_DOUBLE_QUOTE;
-            case ZetarianoLexer.LITERAL_CARACTER:
+            case ZetarianoLexer.CARACTER:
                 return TokenTypes.LITERAL_CHAR;
-            case ZetarianoLexer.ID:
-                if (esReservada(token.getText())) {
-                    return TokenTypes.RESERVED_WORD;
-                }
+            case ZetarianoLexer.IDENTIFICADOR:
                 return TokenTypes.IDENTIFIER;
             case ZetarianoLexer.WS:
                 return TokenTypes.WHITESPACE;

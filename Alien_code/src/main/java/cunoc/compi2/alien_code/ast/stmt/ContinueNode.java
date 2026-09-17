@@ -1,5 +1,7 @@
 package cunoc.compi2.alien_code.ast.stmt;
-import cunoc.compi2.alien_code.ast.CodigoContexto;
+import cunoc.compi2.alien_code.ast.Type;
+import cunoc.compi2.alien_code.semantic.ContextoSemantico;
+import cunoc.compi2.alien_code.ir.CodigoContexto;
 import cunoc.compi2.alien_code.ast.ASTVisitor;
 
 import cunoc.compi2.alien_code.ast.Node;
@@ -27,6 +29,10 @@ public class ContinueNode implements Node {
 
     @Override
     public String traducir(CodigoContexto ctx) {
+        return null;
+    }
+    @Override
+    public Type analizar(ContextoSemantico ctx) {
         return null;
     }
 }

@@ -2,11 +2,23 @@ package cunoc.compi2.alien_code.ui;
 
 import java.awt.BorderLayout;
 import java.io.File;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JOptionPane;
+import cunoc.compi2.alien_code.ast.program.ImportNode;
+import cunoc.compi2.alien_code.ast.program.ProgramNode;
+import cunoc.compi2.alien_code.errors.ErrorListener;
+import cunoc.compi2.alien_code.pigLatin.astbuilder.PigLatinASTBuilder;
+import cunoc.compi2.alien_code.semantic.SemanticAnalyzer;
+import cunoc.compi2.alien_code.semantic.Symbol;
+import cunoc.compi2.alien_code.semantic.SymbolTable;
+import cunoc.compi2.alien_code.ylang.astbuilder.YLangASTBuilder;
+import cunoc.compi2.alien_code.zetariano.astbuilder.ZetarianoASTBuilder;
 
 public class VentanaPrincipal extends JFrame {
 
@@ -201,7 +213,115 @@ public class VentanaPrincipal extends JFrame {
         }
 
         log.agregarExito("Sin errores sint\u00e1cticos.");
-        log.agregarPendiente("> An\u00e1lisis sem\u00e1ntico, cuartetas, C3D y C: pendiente (backend en desarrollo).");
+        if (extensionDe(archivo).equals("pig") && archivo != null) {
+            ejecutarPipelineSemantico(archivo, log);
+        } else {
+            log.agregarPendiente("> An\u00e1lisis sem\u00e1ntico, cuartetas, C3D y C: pendiente (backend en desarrollo).");
+        }
+    }
+
+    private void ejecutarPipelineSemantico(File archivoPig, PanelLog log) {
+        ErrorListener errores = new ErrorListener();
+        List<ProgramNode> programas = new ArrayList<>();
+
+        ProgramNode programaPig = new PigLatinASTBuilder().construir(leer(archivoPig));
+        if (programaPig == null) {
+            log.agregarError("No se pudo construir el AST de " + archivoPig.getName() + ".");
+            return;
+        }
+        programas.add(programaPig);
+
+        for (ImportNode importacion : importsDe(programaPig)) {
+            File archivoImportado = resolverImport(importacion.rutaCompleta);
+            if (archivoImportado == null) {
+                log.agregarError("No se encontr\u00f3 el archivo importado '" + importacion.rutaCompleta + "'.");
+                continue;
+            }
+            ProgramNode programaImportado = construirImportado(archivoImportado);
+            if (programaImportado == null) {
+                log.agregarPendiente("El constructor de AST de " + extensionDe(archivoImportado).toUpperCase()
+                        + " a\u00fan no est\u00e1 implementado (import '" + importacion.rutaCompleta + "').");
+                continue;
+            }
+            programas.add(programaImportado);
+        }
+
+        SemanticAnalyzer analizador = new SemanticAnalyzer(errores);
+        analizador.analizar(programas);
+
+        if (errores.hasErrors()) {
+            for (cunoc.compi2.alien_code.errors.CompilerError error : errores.getErrors()) {
+                log.agregarError("[Error sem\u00e1ntico] l\u00ednea " + error.getLine() + ", columna "
+                        + error.getColumn() + ": " + error.getMessage());
+            }
+        }
+
+        log.agregarExito("An\u00e1lisis sem\u00e1ntico completado (Pase A: declaraciones, Pase B: verificaci\u00f3n).");
+        mostrarSimbolos(analizador.getSymbolTable());
+    }
+
+    private List<ImportNode> importsDe(ProgramNode programa) {
+        List<ImportNode> imports = new ArrayList<>();
+        for (cunoc.compi2.alien_code.ast.Node nodo : programa.declarations) {
+            if (nodo instanceof ImportNode) {
+                imports.add((ImportNode) nodo);
+            }
+        }
+        return imports;
+    }
+
+    private File resolverImport(String rutaCompleta) {
+        if (carpetaProyecto == null) return null;
+        String ruta = rutaCompleta.replace('.', File.separatorChar);
+        File base = new File(carpetaProyecto, ruta);
+        File archivoY = new File(base.getPath() + ".y");
+        if (archivoY.isFile()) return archivoY;
+        File archivoZ = new File(base.getPath() + ".z");
+        if (archivoZ.isFile()) return archivoZ;
+        return null;
+    }
+
+    private ProgramNode construirImportado(File archivo) {
+        String codigo = leer(archivo);
+        if (codigo == null) return null;
+        switch (extensionDe(archivo)) {
+            case "y":
+                return new YLangASTBuilder().construir(codigo);
+            case "z":
+                return new ZetarianoASTBuilder().construir(codigo);
+            default:
+                return null;
+        }
+    }
+
+    private String leer(File archivo) {
+        try {
+            return Files.readString(archivo.toPath(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    private String extensionDe(File archivo) {
+        if (archivo == null) return "";
+        String nombre = archivo.getName().toLowerCase();
+        int punto = nombre.lastIndexOf('.');
+        return punto < 0 ? "" : nombre.substring(punto + 1);
+    }
+
+    private void mostrarSimbolos(SymbolTable symbolTable) {
+        List<Object[]> filas = new ArrayList<>();
+        for (Symbol simbolo : symbolTable.listarSimbolos()) {
+            filas.add(new Object[]{
+                    simbolo.getName(),
+                    String.valueOf(simbolo.getType()),
+                    simbolo.getKind().name(),
+                    simbolo.getSize(),
+                    "",
+                    ""
+            });
+        }
+        ventanaSimbolos.setDatos(filas);
     }
 
     private void verCodigoC(PanelLog log) {

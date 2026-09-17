@@ -1,5 +1,6 @@
 package cunoc.compi2.alien_code.semantic;
 
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -16,6 +17,10 @@ public class Scope {
         symbols.put(symbol.getName(), symbol);
     }
 
+    public boolean contains(String name) {
+        return symbols.containsKey(name);
+    }
+
     public Symbol resolve(String name) {
         Symbol s = symbols.get(name);
         if (s != null) return s;
@@ -25,5 +30,9 @@ public class Scope {
 
     public Scope getParent() {
         return parent;
+    }
+
+    public Collection<Symbol> getTodos() {
+        return symbols.values();
     }
 }

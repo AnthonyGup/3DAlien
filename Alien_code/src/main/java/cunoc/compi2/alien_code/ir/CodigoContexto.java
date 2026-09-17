@@ -1,4 +1,4 @@
-package cunoc.compi2.alien_code.ast;
+package cunoc.compi2.alien_code.ir;
 
 public interface CodigoContexto {
     String nuevoTemporal();

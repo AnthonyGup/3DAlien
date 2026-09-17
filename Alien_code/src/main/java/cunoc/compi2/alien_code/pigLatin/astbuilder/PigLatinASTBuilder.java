@@ -1,4 +1,4 @@
-package cunoc.compi2.alien_code.astbuilder;
+package cunoc.compi2.alien_code.pigLatin.astbuilder;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -11,9 +11,9 @@ import cunoc.compi2.alien_code.ast.program.ProgramNode;
 import cunoc.compi2.alien_code.ast.Type;
 import cunoc.compi2.alien_code.ast.expr.*;
 import cunoc.compi2.alien_code.ast.stmt.*;
-import cunoc.compi2.alien_code.grammar.PigLatinBaseVisitor;
-import cunoc.compi2.alien_code.grammar.PigLatinLexer;
-import cunoc.compi2.alien_code.grammar.PigLatinParser;
+import cunoc.compi2.alien_code.pigLatin.grammar.PigLatinBaseVisitor;
+import cunoc.compi2.alien_code.pigLatin.grammar.PigLatinLexer;
+import cunoc.compi2.alien_code.pigLatin.grammar.PigLatinParser;
 
 public class PigLatinASTBuilder extends PigLatinBaseVisitor<Node> {
 

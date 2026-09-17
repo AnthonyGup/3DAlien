@@ -6,7 +6,7 @@ import org.fife.ui.rsyntaxtextarea.AbstractTokenMaker;
 import org.fife.ui.rsyntaxtextarea.Token;
 import org.fife.ui.rsyntaxtextarea.TokenMap;
 import org.fife.ui.rsyntaxtextarea.TokenTypes;
-import cunoc.compi2.alien_code.grammar.PigLatinLexer;
+import cunoc.compi2.alien_code.pigLatin.grammar.PigLatinLexer;
 
 public class PigLatinTokenMaker extends AbstractTokenMaker {
 

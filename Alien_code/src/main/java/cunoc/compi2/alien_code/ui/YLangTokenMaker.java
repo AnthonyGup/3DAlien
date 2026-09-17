@@ -6,14 +6,14 @@ import org.fife.ui.rsyntaxtextarea.AbstractTokenMaker;
 import org.fife.ui.rsyntaxtextarea.Token;
 import org.fife.ui.rsyntaxtextarea.TokenMap;
 import org.fife.ui.rsyntaxtextarea.TokenTypes;
-import cunoc.compi2.alien_code.grammar.YLangLexer;
+import cunoc.compi2.alien_code.ylang.grammar.YLangLexer;
 
 public class YLangTokenMaker extends AbstractTokenMaker {
 
     private static final String[] RESERVADAS = {
-        "entero", "decimal", "texto", "booleano", "caracter", "vacio",
-        "estructura", "si", "aliter", "sino", "mientras", "para",
-        "regresar", "imprimir", "leer", "verdadero", "falso", "romper", "continuar"
+        "estructura", "definir", "retornar", "si", "entonces", "sino", "contrario",
+        "elegir", "caso", "siempre", "romper", "continuar", "para", "mientras", "hacer",
+        "entero", "flotante", "cadena", "caracter", "bool", "verdadero", "falso"
     };
 
     @Override
@@ -64,21 +64,29 @@ public class YLangTokenMaker extends AbstractTokenMaker {
     private int mapearTipo(org.antlr.v4.runtime.Token token) {
         int tipo = token.getType();
         switch (tipo) {
-            case YLangLexer.LITERAL_ENTERO:
+            case YLangLexer.NUMERO:
                 return TokenTypes.LITERAL_NUMBER_DECIMAL_INT;
-            case YLangLexer.LITERAL_DECIMAL:
+            case YLangLexer.DECIMAL:
                 return TokenTypes.LITERAL_NUMBER_FLOAT;
-            case YLangLexer.LITERAL_CADENA:
+            case YLangLexer.CADENA:
                 return TokenTypes.LITERAL_STRING_DOUBLE_QUOTE;
-            case YLangLexer.LITERAL_CARACTER:
+            case YLangLexer.CARACTER:
                 return TokenTypes.LITERAL_CHAR;
-            case YLangLexer.ID:
+            case YLangLexer.IDENTIFICADOR:
                 if (esReservada(token.getText())) {
                     return TokenTypes.RESERVED_WORD;
                 }
                 return TokenTypes.IDENTIFIER;
-            case YLangLexer.WS:
+            case YLangLexer.ESTRUCTURAS_MARKER:
+            case YLangLexer.FUNCIONES_MARKER:
+                return TokenTypes.RESERVED_WORD;
+            case YLangLexer.WS_INTERNO:
+            case YLangLexer.NEWLINE:
+            case YLangLexer.INDENT:
+            case YLangLexer.DEDENT:
                 return TokenTypes.WHITESPACE;
+            case YLangLexer.COMENTARIO_BLOQUE:
+                return TokenTypes.COMMENT_MULTILINE;
             default:
                 if (esReservada(token.getText())) {
                     return TokenTypes.RESERVED_WORD;

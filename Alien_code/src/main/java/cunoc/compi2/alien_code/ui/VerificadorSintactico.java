@@ -51,11 +51,11 @@ public class VerificadorSintactico {
     }
 
     private Resultado verificarY(String codigo) {
-        cunoc.compi2.alien_code.grammar.YLangLexer lexer =
-                new cunoc.compi2.alien_code.grammar.YLangLexer(CharStreams.fromString(codigo));
+        cunoc.compi2.alien_code.ylang.grammar.YLangLexer lexer =
+                new cunoc.compi2.alien_code.ylang.grammar.YLangLexer(CharStreams.fromString(codigo));
         CommonTokenStream tokens = new CommonTokenStream(lexer);
-        cunoc.compi2.alien_code.grammar.YLangParser parser =
-                new cunoc.compi2.alien_code.grammar.YLangParser(tokens);
+        cunoc.compi2.alien_code.ylang.grammar.YLangParser parser =
+                new cunoc.compi2.alien_code.ylang.grammar.YLangParser(tokens);
         List<ErrorSintactico> errores = analizar(lexer, parser, tokens);
         if (errores.isEmpty()) {
             parser.reset();
@@ -65,11 +65,11 @@ public class VerificadorSintactico {
     }
 
     private Resultado verificarZ(String codigo) {
-        cunoc.compi2.alien_code.grammar.ZetarianoLexer lexer =
-                new cunoc.compi2.alien_code.grammar.ZetarianoLexer(CharStreams.fromString(codigo));
+        cunoc.compi2.alien_code.zetariano.grammar.ZetarianoLexer lexer =
+                new cunoc.compi2.alien_code.zetariano.grammar.ZetarianoLexer(CharStreams.fromString(codigo));
         CommonTokenStream tokens = new CommonTokenStream(lexer);
-        cunoc.compi2.alien_code.grammar.ZetarianoParser parser =
-                new cunoc.compi2.alien_code.grammar.ZetarianoParser(tokens);
+        cunoc.compi2.alien_code.zetariano.grammar.ZetarianoParser parser =
+                new cunoc.compi2.alien_code.zetariano.grammar.ZetarianoParser(tokens);
         List<ErrorSintactico> errores = analizar(lexer, parser, tokens);
         if (errores.isEmpty()) {
             parser.reset();
@@ -79,11 +79,11 @@ public class VerificadorSintactico {
     }
 
     private Resultado verificarPig(String codigo) {
-        cunoc.compi2.alien_code.grammar.PigLatinLexer lexer =
-                new cunoc.compi2.alien_code.grammar.PigLatinLexer(CharStreams.fromString(codigo));
+        cunoc.compi2.alien_code.pigLatin.grammar.PigLatinLexer lexer =
+                new cunoc.compi2.alien_code.pigLatin.grammar.PigLatinLexer(CharStreams.fromString(codigo));
         CommonTokenStream tokens = new CommonTokenStream(lexer);
-        cunoc.compi2.alien_code.grammar.PigLatinParser parser =
-                new cunoc.compi2.alien_code.grammar.PigLatinParser(tokens);
+        cunoc.compi2.alien_code.pigLatin.grammar.PigLatinParser parser =
+                new cunoc.compi2.alien_code.pigLatin.grammar.PigLatinParser(tokens);
         List<ErrorSintactico> errores = analizar(lexer, parser, tokens);
         if (errores.isEmpty()) {
             parser.reset();

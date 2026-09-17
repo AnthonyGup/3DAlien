@@ -1,4 +1,5 @@
 package cunoc.compi2.alien_code.ast;
+import cunoc.compi2.alien_code.ast.Type;
 
 public enum Type {
     INT,
@@ -25,12 +26,12 @@ public enum Type {
 
     public static Type fromZetariano(String name) {
         return switch (name.toLowerCase()) {
-            case "numerus" -> INT;
-            case "numerusdecimalis" -> FLOAT;
-            case "verbum" -> STRING;
-            case "verum" -> BOOL;
-            case "littera" -> CHAR;
-            case "vacuum" -> VOID;
+            case "int" -> INT;
+            case "double" -> FLOAT;
+            case "string" -> STRING;
+            case "boolean" -> BOOL;
+            case "char" -> CHAR;
+            case "void" -> VOID;
             default -> null;
         };
     }

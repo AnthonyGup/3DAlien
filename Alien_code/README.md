@@ -10,13 +10,13 @@ Compilador multi-lenguaje para el curso de Compiladores 2.
 | **Zetariano** | Lenguaje con sintaxis pseudo-latina |
 | **Pig Latin** | Lenguaje con sintaxis en inglés (estilo Pig Latin) |
 
-Los tres lenguajes comparten los mismos conceptos (variables, funciones, structs/clases, ciclos, condicionales) pero con sintaxis diferente. El compilador genera un AST unificado que permite reutilizar la semántica y generación de código para los tres.
+Los tres lenguajes comparten los mismos conceptos (variables, funciones, structs/clases, ciclos, condicionales) pero con sintaxis diferente. Cada lenguaje define su gramática, su ASTBuilder (que genera nodos del AST unificado) y su Vocabulary; el **AST, el análisis semántico en dos pases y el backend** son comunes. La semántica valida el `.pig` junto con sus imports `.y`/`.z` en dos pases (Pase A: declaraciones/firmas; Pase B: verificación), lo que permite resolver llamadas a funciones importadas sin depender del orden de los archivos.
 
 ## Stack tecnológico
 
-- **Java 17+**
+- **Java 21**
 - **ANTLR4** - Análisis léxico y sintáctico
-- **JavaFX** - Interfaz gráfica
+- **Swing + RSyntaxTextArea** - Interfaz gráfica con resaltado por lenguaje
 - **Maven** - Build tool
 - **C** - Código objetivo (generación de código C)
 
@@ -26,13 +26,13 @@ Los tres lenguajes comparten los mismos conceptos (variables, funciones, structs
 Código fuente (.y / .z / .pig)
         │
         ▼
-  ANTLR Lexer/Parser  →  ParseTree
+  ANTLR Lexer/Parser  →  ParseTree          (por lenguaje)
         │
         ▼
-  ASTBuilder (puente)  →  AST propio
+  ASTBuilder → nodos del AST unificado      (por lenguaje, emiten ast.*)
         │
         ▼
-  Analizador Semántico  →  Tabla de símbolos, decoración de tipos
+  SemanticAnalyzer → Pase A (firmas) + Pase B (verificación)   (.pig + imports .y/.z)
         │
         ▼
   Generador de Cuartetas  →  List<Cuarteta>
@@ -49,39 +49,39 @@ Código fuente (.y / .z / .pig)
 ```
 Alien_code/
 ├── pom.xml
-├── docs/
-│   └── diagrama_clases.png
-├── src/main/antlr4/cunoc/compi2/alien_code/grammar/
-│   ├── YLang.g4
-│   ├── Zetariano.g4
-│   └── PigLatin.g4
+├── src/main/antlr4/cunoc/compi2/alien_code/
+│   ├── pigLatin/grammar/PigLatin.g4
+│   ├── ylang/grammar/YLangLexer.g4 + YLangParser.g4
+│   └── zetariano/grammar/Zetariano.g4
 ├── src/main/java/cunoc/compi2/alien_code/
-│   ├── ast/           # Nodos del AST propio + ASTVisitor
-│   ├── astbuilder/    # Puentes ANTLR → AST
-│   ├── semantic/      # Tabla de símbolos, analizador semántico
-│   ├── ir/            # Cuartetas, generador de código intermedio
-│   ├── c3d/           # Generador C3D
-│   ├── codegen/       # Generador de código C
-│   ├── errors/        # Manejo de errores
-│   ├── ui/            # JavaFX: editor, resaltado, consola
+│   ├── pigLatin/    # grammar, astbuilder, semantic (Vocabulary)
+│   ├── ylang/       # grammar, astbuilder, semantic (Vocabulary)
+│   ├── zetariano/   # grammar, astbuilder, semantic (Vocabulary)
+│   ├── ast/         # AST unificado: program, expr, stmt, decl + Type
+│   ├── semantic/    # SemanticAnalyzer (Pase A/B), ContextoSemantico, Symbol/SymbolTable/Scope
+│   ├── ir/          # CodigoContexto, Cuartetas, IR
+│   ├── c3d/         # Generador C3D
+│   ├── codegen/     # Generador de código C
+│   ├── errors/      # Manejo de errores
+│   ├── ui/          # Swing: editor, resaltado, consola, pipeline
 │   └── Alien_code.java
 └── src/test/java/cunoc/compi2/alien_code/
+    ├── ylang/grammar/YLangGrammarTest.java
+    ├── zetariano/grammar/ZetarianoGrammarTest.java
+    └── semantic/SemanticAnalyzerTest.java
 ```
 
 ## Compilar y ejecutar
 
 ```bash
-# Generar fuentes ANTLR
-mvn generate-sources
+# Generar fuentes ANTLR y compilar
+mvn clean compile
 
-# Compilar
-mvn compile
+# Ejecutar pruebas
+mvn test
 
-# Ejecutar
+# Ejecutar la aplicación gráfica
 mvn exec:java
-
-# Ejecutar interfaz gráfica (JavaFX)
-mvn javafx:run
 ```
 
 ## Equipo
