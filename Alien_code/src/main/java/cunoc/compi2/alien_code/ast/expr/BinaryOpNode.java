@@ -44,7 +44,7 @@ public class BinaryOpNode implements Node {
         Type der = ctx.evaluar(derecha);
 
         switch (operador) {
-            case "+": case "-": case "*": case "/": {
+            case "+": case "-": case "*": case "/": case "%": {
                 Type resultado = TypeCompat.tipoAritmetico(izq, der);
                 if (resultado == null && izq != null && der != null) {
                     ctx.registrarError(getLine(), getColumn(),
@@ -62,7 +62,7 @@ public class BinaryOpNode implements Node {
                     ctx.registrarError(getLine(), getColumn(), "No se puede comparar " + izq + " con " + der);
                 }
                 return Type.BOOL;
-            case "<": case ">":
+            case "<": case ">": case "<=": case ">=":
                 if (!TypeCompat.sonOrdenables(izq, der)) {
                     ctx.registrarError(getLine(), getColumn(),
                         "'" + operador + "' requiere tipos numéricos, se dio " + izq + " y " + der);

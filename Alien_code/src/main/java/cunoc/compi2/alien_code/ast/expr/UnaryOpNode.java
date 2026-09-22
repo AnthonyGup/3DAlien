@@ -39,9 +39,10 @@ public class UnaryOpNode implements Node {
     @Override
     public Type analizar(ContextoSemantico ctx) {
         Type tipo = ctx.evaluar(operando);
-        if (operador.equals("non")) {
+        if (operador.equals("non") || operador.equals("!")) {
             if (tipo != null && tipo != Type.BOOL) {
-                ctx.registrarError(getLine(), getColumn(), "'non' requiere un operando booleano, se dio " + tipo);
+                ctx.registrarError(getLine(), getColumn(),
+                    "La negación '" + operador + "' requiere un operando booleano, se dio " + tipo);
                 return null;
             }
             return Type.BOOL;

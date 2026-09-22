@@ -13,6 +13,8 @@ public class MethodDeclNode implements Node {
     public String nombre;
     public List<ParameterNode> parametros;
     public Type tipoRetorno;
+    public String tipoRetornoNombre;
+    public Type tipoRetornoElemento;
     public BlockNode cuerpo;
     private final int line;
     private final int column;
@@ -44,6 +46,16 @@ public class MethodDeclNode implements Node {
 
     @Override
     public Type analizar(ContextoSemantico ctx) {
-        return null;
+        ctx.entrarAmbitoDentroDe(ctx.ambitoDeClaseActual());
+        for (ParameterNode p : parametros) ctx.evaluar(p);
+
+        Type esperado = tipoRetorno == Type.ARRAY && tipoRetornoElemento != null
+            ? tipoRetornoElemento : tipoRetorno;
+        ctx.pushTipoRetorno(esperado);
+        ctx.evaluar(cuerpo);
+        ctx.popTipoRetorno();
+
+        ctx.salirAmbito();
+        return tipoRetorno;
     }
 }

@@ -6,6 +6,7 @@ import cunoc.compi2.alien_code.ast.ASTVisitor;
 
 import cunoc.compi2.alien_code.ast.Node;
 import cunoc.compi2.alien_code.semantic.Symbol;
+import cunoc.compi2.alien_code.semantic.TypeCompat;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -107,7 +108,7 @@ public class AccessNode implements Node {
                     break;
                 }
                 case INDICE: {
-                    if (!actual.isArray()) {
+                    if (!actual.isArray() && actual.getDimensiones() <= 0) {
                         ctx.registrarError(getLine(), getColumn(),
                             "No se puede indexar un valor que no es arreglo (" + actual.getType() + ")");
                         return null;
@@ -117,16 +118,16 @@ public class AccessNode implements Node {
                         ctx.registrarError(getLine(), getColumn(),
                             "El índice de un arreglo debe ser entero, se dio " + tipoIndice);
                     }
-                    Symbol elemento = new Symbol(actual.getName(), actual.getType(), Symbol.Kind.VARIABLE, false, false, false, 0);
+                    int restantes = Math.max(0, actual.getDimensiones() - 1);
+                    Symbol elemento = new Symbol(actual.getName(), actual.getType(), Symbol.Kind.VARIABLE, restantes > 0, false, false, 0);
                     elemento.setTipoNombre(actual.getTipoNombre());
                     elemento.setMiembros(actual.getMiembros());
+                    elemento.setDimensiones(restantes);
                     actual = elemento;
                     break;
                 }
                 case LLAMADA: {
-                    for (Node arg : s.argumentos) {
-                        ctx.evaluar(arg);
-                    }
+                    List<Type> tiposArgs = tiposDeArgumentos(ctx, s.argumentos);
                     if (metodoPendiente != null) {
                         Symbol metodo = contenedorPendiente.getMiembros().resolve(metodoPendiente);
                         if (metodo == null) {
@@ -134,16 +135,54 @@ public class AccessNode implements Node {
                                 "No existe el método '" + metodoPendiente + "'");
                             return null;
                         }
+                        if (!metodo.tieneFirmaCompatible(tiposArgs)) {
+                            ctx.registrarError(getLine(), getColumn(),
+                                "El método '" + metodoPendiente + "' no coincide con los argumentos dados");
+                            return null;
+                        }
                         actual = metodo;
                         metodoPendiente = null;
                     } else {
-                        Symbol funcion = ctx.resolver(nombre);
-                        if (funcion == null || funcion.getKind() != Symbol.Kind.FUNCION) {
+                        Symbol objetivo = actual;
+                        if (objetivo == null || (objetivo.getKind() != Symbol.Kind.FUNCION
+                                && objetivo.getKind() != Symbol.Kind.METODO)) {
                             ctx.registrarError(getLine(), getColumn(),
                                 "'" + nombre + "' no es una función conocida (¿falta un import?)");
                             return null;
                         }
-                        actual = funcion;
+                        if (objetivo.isNativa()) {
+                            return objetivo.getType();
+                        }
+                        if (objetivo.getKind() == Symbol.Kind.METODO) {
+                            if (!objetivo.tieneFirmaCompatible(tiposArgs)) {
+                                ctx.registrarError(getLine(), getColumn(),
+                                    "El método '" + objetivo.getName()
+                                    + "' no coincide con los argumentos dados");
+                                return null;
+                            }
+                            actual = objetivo;
+                            break;
+                        }
+                        if (tiposArgs.size() != objetivo.getTiposParametros().size()) {
+                            ctx.registrarError(getLine(), getColumn(),
+                                "La función '" + nombre + "' espera "
+                                + objetivo.getTiposParametros().size() + " argumento(s) pero se dieron "
+                                + tiposArgs.size());
+                            return null;
+                        }
+                        for (int i = 0; i < tiposArgs.size(); i++) {
+                            Type esperado = objetivo.getTiposParametros().get(i);
+                            if (esperado == Type.ARRAY && s.argumentos.get(i) instanceof StructLiteralNode) {
+                                continue;
+                            }
+                            if (!TypeCompat.esAsignable(esperado, tiposArgs.get(i))) {
+                                ctx.registrarError(getLine(), getColumn(),
+                                    "El argumento " + (i + 1) + " de '" + nombre + "' debe ser "
+                                    + esperado + " pero se dio " + tiposArgs.get(i));
+                                return null;
+                            }
+                        }
+                        actual = objetivo;
                     }
                     break;
                 }
@@ -151,5 +190,61 @@ public class AccessNode implements Node {
         }
 
         return actual.getType();
+    }
+
+    static List<Type> tiposDeArgumentos(ContextoSemantico ctx, List<Node> argumentos) {
+        List<Type> tipos = new ArrayList<>();
+        for (Node arg : argumentos) {
+            tipos.add(tipoDeArgumento(ctx, arg));
+        }
+        return tipos;
+    }
+
+    private static Type tipoDeArgumento(ContextoSemantico ctx, Node arg) {
+        Type tipo = ctx.evaluar(arg);
+        if (tipo != Type.ARRAY && arg instanceof AccessNode acceso) {
+            Symbol simbolo = resolverSimbolo(ctx, acceso);
+            if (simbolo != null && simbolo.isArray()) {
+                return Type.ARRAY;
+            }
+        }
+        return tipo;
+    }
+
+    public static Symbol resolverSimbolo(ContextoSemantico ctx, AccessNode acceso) {
+        Symbol actual = ctx.resolver(acceso.nombre);
+        if (actual == null) {
+            return null;
+        }
+        for (Sufijo s : acceso.sufijos) {
+            if (s.tipo == Sufijo.Tipo.LLAMADA) {
+                return null;
+            }
+            if (s.tipo == Sufijo.Tipo.CAMPO) {
+                if (actual.getType() != Type.STRUCT && actual.getType() != Type.CLASS) {
+                    return null;
+                }
+                Symbol contenedor = ctx.resolver(actual.getTipoNombre());
+                if (contenedor == null || contenedor.getMiembros() == null) {
+                    return null;
+                }
+                actual = contenedor.getMiembros().resolve(s.nombreCampo);
+                if (actual == null) {
+                    return null;
+                }
+            } else {
+                if (!actual.isArray()) {
+                    return null;
+                }
+                int restantes = Math.max(0, actual.getDimensiones() - 1);
+                Symbol elemento = new Symbol(actual.getName(), actual.getType(), Symbol.Kind.VARIABLE,
+                    restantes > 0, false, false, 0);
+                elemento.setTipoNombre(actual.getTipoNombre());
+                elemento.setMiembros(actual.getMiembros());
+                elemento.setDimensiones(restantes);
+                actual = elemento;
+            }
+        }
+        return actual;
     }
 }

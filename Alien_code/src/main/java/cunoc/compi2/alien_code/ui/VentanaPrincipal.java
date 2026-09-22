@@ -10,10 +10,14 @@ import java.util.List;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JOptionPane;
+import cunoc.compi2.alien_code.ast.Node;
+import cunoc.compi2.alien_code.ast.decl.ClassDeclNode;
 import cunoc.compi2.alien_code.ast.program.ImportNode;
 import cunoc.compi2.alien_code.ast.program.ProgramNode;
 import cunoc.compi2.alien_code.errors.ErrorListener;
 import cunoc.compi2.alien_code.pigLatin.astbuilder.PigLatinASTBuilder;
+import cunoc.compi2.alien_code.ylang.astbuilder.YLangASTBuilder;
+import cunoc.compi2.alien_code.zetariano.astbuilder.ZetarianoASTBuilder;
 import cunoc.compi2.alien_code.semantic.SemanticAnalyzer;
 import cunoc.compi2.alien_code.semantic.Symbol;
 import cunoc.compi2.alien_code.semantic.SymbolTable;
@@ -180,6 +184,7 @@ public class VentanaPrincipal extends JFrame {
     private void compilar(PanelLog log) {
         log.limpiar();
         ventanaErrores.limpiar();
+        ventanaSimbolos.limpiar();
 
         EditorPanel editor = mainPanel.getEditorTabs().getEditorSeleccionado();
         if (editor == null) {
@@ -205,39 +210,54 @@ public class VentanaPrincipal extends JFrame {
         if (resultado.hayErrores()) {
             List<Object[]> filas = new ArrayList<>();
             for (VerificadorSintactico.ErrorSintactico error : resultado.errores) {
-                log.agregarError("[Error sint\u00e1ctico] l\u00ednea " + error.linea + ", columna " + error.columna + ": " + error.mensaje);
                 filas.add(new Object[]{"Sint\u00e1ctico", error.mensaje, error.linea, error.columna});
             }
             ventanaErrores.setDatos(filas);
+            log.agregarError("Se detectaron " + resultado.errores.size()
+                + " error(es) sint\u00e1cticos. Ver Reportes > Ver errores.");
             return;
         }
 
         log.agregarExito("Sin errores sint\u00e1cticos.");
-        if (extensionDe(archivo).equals("pig") && archivo != null) {
-            ejecutarPipelineSemantico(archivo, log);
+        String extension = extensionDe(archivo);
+        if (archivo != null && (extension.equals("pig") || extension.equals("y") || extension.equals("z"))) {
+            ejecutarPipelineSemantico(archivo, log, ventanaErrores);
         } else {
             log.agregarPendiente("> An\u00e1lisis sem\u00e1ntico, cuartetas, C3D y C: pendiente (backend en desarrollo).");
         }
     }
 
-    private void ejecutarPipelineSemantico(File archivoPig, PanelLog log) {
+    private void ejecutarPipelineSemantico(File archivo, PanelLog log, VentanaReporte ventanaErrores) {
         ErrorListener errores = new ErrorListener();
         List<ProgramNode> programas = new ArrayList<>();
+        List<Object[]> filasErrores = new ArrayList<>();
 
-        ProgramNode programaPig = new PigLatinASTBuilder().construir(leer(archivoPig));
-        if (programaPig == null) {
-            log.agregarError("No se pudo construir el AST de " + archivoPig.getName() + ".");
+        ProgramNode programa = construirAST(archivo);
+        if (programa == null) {
+            log.agregarError("No se pudo construir el AST de " + archivo.getName() + ".");
             return;
         }
-        programas.add(programaPig);
+        programas.add(programa);
 
-        for (ImportNode importacion : importsDe(programaPig)) {
+        if (extensionDe(archivo).equals("z")) {
+            String esperado = archivo.getName().replaceFirst("(?i)\\.z$", "");
+            String clase = nombreClasePrincipal(programa);
+            if (clase != null && !clase.equals(esperado)) {
+                filasErrores.add(new Object[]{"Sem\u00e1ntico",
+                    "El archivo debe llamarse igual que la clase pública '" + clase + "'.",
+                    programa.getLine(), programa.getColumn()});
+            }
+        }
+
+        for (ImportNode importacion : importsDe(programa)) {
             File archivoImportado = resolverImport(importacion.rutaCompleta);
             if (archivoImportado == null) {
-                log.agregarError("No se encontr\u00f3 el archivo importado '" + importacion.rutaCompleta + "'.");
+                filasErrores.add(new Object[]{"Sem\u00e1ntico",
+                    "No se encontr\u00f3 el archivo importado '" + importacion.rutaCompleta + "'.",
+                    importacion.getLine(), importacion.getColumn()});
                 continue;
             }
-            ProgramNode programaImportado = construirImportado(archivoImportado);
+            ProgramNode programaImportado = construirAST(archivoImportado);
             if (programaImportado == null) {
                 log.agregarPendiente("El constructor de AST de " + extensionDe(archivoImportado).toUpperCase()
                         + " a\u00fan no est\u00e1 implementado (import '" + importacion.rutaCompleta + "').");
@@ -251,18 +271,49 @@ public class VentanaPrincipal extends JFrame {
 
         if (errores.hasErrors()) {
             for (cunoc.compi2.alien_code.errors.CompilerError error : errores.getErrors()) {
-                log.agregarError("[Error sem\u00e1ntico] l\u00ednea " + error.getLine() + ", columna "
-                        + error.getColumn() + ": " + error.getMessage());
+                filasErrores.add(new Object[]{"Sem\u00e1ntico", error.getMessage(),
+                    error.getLine(), error.getColumn()});
             }
         }
 
-        log.agregarExito("An\u00e1lisis sem\u00e1ntico completado (Pase A: declaraciones, Pase B: verificaci\u00f3n).");
+        if (!filasErrores.isEmpty()) {
+            ventanaErrores.setDatos(filasErrores);
+            log.agregarError("Se detectaron " + filasErrores.size()
+                + " error(es). Ver Reportes > Ver errores.");
+            return;
+        }
+
+        log.agregarExito("An\u00e1lisis sem\u00e1ntico completado.");
         mostrarSimbolos(analizador.getSymbolTable());
+    }
+
+    private ProgramNode construirAST(File archivo) {
+        String codigo = leer(archivo);
+        if (codigo == null) return null;
+        switch (extensionDe(archivo)) {
+            case "pig":
+                return new PigLatinASTBuilder().construir(codigo);
+            case "y":
+                return new YLangASTBuilder().construir(codigo);
+            case "z":
+                return new ZetarianoASTBuilder().construir(codigo);
+            default:
+                return null;
+        }
+    }
+
+    private String nombreClasePrincipal(ProgramNode programa) {
+        for (Node declaracion : programa.declarations) {
+            if (declaracion instanceof ClassDeclNode clase) {
+                return clase.nombre;
+            }
+        }
+        return null;
     }
 
     private List<ImportNode> importsDe(ProgramNode programa) {
         List<ImportNode> imports = new ArrayList<>();
-        for (cunoc.compi2.alien_code.ast.Node nodo : programa.declarations) {
+        for (Node nodo : programa.declarations) {
             if (nodo instanceof ImportNode) {
                 imports.add((ImportNode) nodo);
             }
@@ -279,19 +330,6 @@ public class VentanaPrincipal extends JFrame {
         File archivoZ = new File(base.getPath() + ".z");
         if (archivoZ.isFile()) return archivoZ;
         return null;
-    }
-
-    private ProgramNode construirImportado(File archivo) {
-        String codigo = leer(archivo);
-        if (codigo == null) return null;
-        switch (extensionDe(archivo)) {
-            case "y":
-                return new YLangASTBuilder().construir(codigo);
-            case "z":
-                return new ZetarianoASTBuilder().construir(codigo);
-            default:
-                return null;
-        }
     }
 
     private String leer(File archivo) {
@@ -314,11 +352,11 @@ public class VentanaPrincipal extends JFrame {
         for (Symbol simbolo : symbolTable.listarSimbolos()) {
             filas.add(new Object[]{
                     simbolo.getName(),
-                    String.valueOf(simbolo.getType()),
+                    simbolo.getType() != null ? String.valueOf(simbolo.getType()) : "vacio",
                     simbolo.getKind().name(),
                     simbolo.getSize(),
-                    "",
-                    ""
+                    "-",
+                    simbolo.getLinea() > 0 ? simbolo.getLinea() : "-"
             });
         }
         ventanaSimbolos.setDatos(filas);

@@ -8,7 +8,9 @@ import cunoc.compi2.alien_code.ast.decl.ParameterNode;
 import cunoc.compi2.alien_code.ast.decl.StructDeclNode;
 import cunoc.compi2.alien_code.ast.expr.AccessNode;
 import cunoc.compi2.alien_code.ast.expr.BinaryOpNode;
+import cunoc.compi2.alien_code.ast.expr.ConditionalNode;
 import cunoc.compi2.alien_code.ast.expr.LiteralNode;
+import cunoc.compi2.alien_code.ast.expr.NewArrayNode;
 import cunoc.compi2.alien_code.ast.expr.NewObjectNode;
 import cunoc.compi2.alien_code.ast.expr.StructLiteralNode;
 import cunoc.compi2.alien_code.ast.expr.UnaryOpNode;
@@ -27,6 +29,9 @@ import cunoc.compi2.alien_code.ast.stmt.IfNode;
 import cunoc.compi2.alien_code.ast.stmt.IncrementNode;
 import cunoc.compi2.alien_code.ast.stmt.PrintNode;
 import cunoc.compi2.alien_code.ast.stmt.ReadNode;
+import cunoc.compi2.alien_code.ast.stmt.CaseNode;
+import cunoc.compi2.alien_code.ast.stmt.ReturnNode;
+import cunoc.compi2.alien_code.ast.stmt.SwitchNode;
 import cunoc.compi2.alien_code.ast.stmt.VariableDeclNode;
 import cunoc.compi2.alien_code.ast.stmt.WhileNode;
 
@@ -53,10 +58,15 @@ public interface ASTVisitor<T> {
     default T visitBreak(BreakNode node) { return null; }
     default T visitIf(IfNode node) { return null; }
     default T visitElseIf(ElseIfNode node) { return null; }
+    default T visitReturn(ReturnNode node) { return null; }
+    default T visitSwitch(SwitchNode node) { return null; }
+    default T visitCase(CaseNode node) { return null; }
 
     default T visitLiteral(LiteralNode node) { return null; }
     default T visitBinaryOp(BinaryOpNode node) { return null; }
     default T visitUnaryOp(UnaryOpNode node) { return null; }
+    default T visitConditional(ConditionalNode node) { return null; }
+    default T visitNewArray(NewArrayNode node) { return null; }
 
     default T visitStructDecl(StructDeclNode node) { return null; }
     default T visitFunctionDecl(FunctionDeclNode node) { return null; }

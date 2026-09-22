@@ -7,7 +7,7 @@ import cunoc.compi2.alien_code.ast.ASTVisitor;
 import cunoc.compi2.alien_code.ast.Node;
 
 public class LiteralNode implements Node {
-    public enum Clase { ENTERO, DECIMAL, CADENA, CARACTER, BOOLEANO }
+    public enum Clase { ENTERO, DECIMAL, CADENA, CARACTER, BOOLEANO, NULO }
 
     public Clase clase;
     public String valor;
@@ -45,6 +45,7 @@ public class LiteralNode implements Node {
             case CADENA: return Type.STRING;
             case CARACTER: return Type.CHAR;
             case BOOLEANO: return Type.BOOL;
+            case NULO: return Type.NULL;
             default: return null;
         }
     }

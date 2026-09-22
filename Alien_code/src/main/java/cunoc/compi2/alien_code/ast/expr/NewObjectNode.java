@@ -44,21 +44,14 @@ public class NewObjectNode implements Node {
         if (clase == null || clase.getKind() != Symbol.Kind.CLASE) {
             ctx.registrarError(getLine(), getColumn(),
                 "'" + nombreClase + "' no es una clase conocida (¿falta un import .z?)");
-            for (Node argumento : argumentos) {
-                ctx.evaluar(argumento);
-            }
+            for (Node a : argumentos) ctx.evaluar(a);
             return null;
         }
-        for (Node argumento : argumentos) {
-            ctx.evaluar(argumento);
-        }
+        List<Type> tiposArgs = AccessNode.tiposDeArgumentos(ctx, argumentos);
 
-        boolean algunoCoincide = clase.getMiembros() != null
-            && clase.getMiembros().getTodos().stream()
-                .anyMatch(s -> s.getKind() == Symbol.Kind.CONSTRUCTOR && s.getSize() == argumentos.size());
-        if (!algunoCoincide) {
+        if (!clase.tieneConstructorCompatible(tiposArgs)) {
             ctx.registrarError(getLine(), getColumn(),
-                "No existe un constructor de '" + nombreClase + "' con " + argumentos.size() + " argumento(s)");
+                "No existe un constructor de '" + nombreClase + "' que reciba esos argumentos");
             return null;
         }
         return Type.CLASS;

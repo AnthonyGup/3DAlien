@@ -33,6 +33,10 @@ public class Scope {
         return null;
     }
 
+    public Symbol resolveLocal(String name) {
+        return symbols.get(name);
+    }
+
     public Scope getParent() {
         return parent;
     }

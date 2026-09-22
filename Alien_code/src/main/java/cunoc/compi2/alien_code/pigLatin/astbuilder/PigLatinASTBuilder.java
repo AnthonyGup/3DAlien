@@ -5,6 +5,7 @@ import java.util.List;
 import org.antlr.v4.runtime.CharStreams;
 import org.antlr.v4.runtime.CommonTokenStream;
 import org.antlr.v4.runtime.ParserRuleContext;
+import org.antlr.v4.runtime.tree.ParseTree;
 import cunoc.compi2.alien_code.ast.program.ImportNode;
 import cunoc.compi2.alien_code.ast.Node;
 import cunoc.compi2.alien_code.ast.program.ProgramNode;
@@ -289,12 +290,12 @@ public class PigLatinASTBuilder extends PigLatinBaseVisitor<Node> {
     @Override
     public Node visitExpresionIgualdad(PigLatinParser.ExpresionIgualdadContext ctx) {
         Node result = visit(ctx.expresionRelacional(0));
-        List<org.antlr.v4.runtime.tree.TerminalNode> operators = new ArrayList<>();
-        operators.addAll(ctx.IGUAL());
-        operators.addAll(ctx.DISTINTO());
         List<PigLatinParser.ExpresionRelacionalContext> sides = ctx.expresionRelacional();
-        for (int i = 0; i < operators.size(); i++) {
-            result = new BinaryOpNode(operators.get(i).getText(), result, visit(sides.get(i + 1)), line(ctx), column(ctx));
+        int lado = 1;
+        for (ParseTree hijo : ctx.children) {
+            if (hijo instanceof org.antlr.v4.runtime.tree.TerminalNode terminal) {
+                result = new BinaryOpNode(terminal.getText(), result, visit(sides.get(lado++)), line(ctx), column(ctx));
+            }
         }
         return result;
     }
@@ -302,14 +303,12 @@ public class PigLatinASTBuilder extends PigLatinBaseVisitor<Node> {
     @Override
     public Node visitExpresionRelacional(PigLatinParser.ExpresionRelacionalContext ctx) {
         Node result = visit(ctx.expresionAditiva(0));
-        List<org.antlr.v4.runtime.tree.TerminalNode> operators = new ArrayList<>();
-        operators.addAll(ctx.MENOR());
-        operators.addAll(ctx.MAYOR());
-        operators.addAll(ctx.MENOR_IGUAL());
-        operators.addAll(ctx.MAYOR_IGUAL());
         List<PigLatinParser.ExpresionAditivaContext> sides = ctx.expresionAditiva();
-        for (int i = 0; i < operators.size(); i++) {
-            result = new BinaryOpNode(operators.get(i).getText(), result, visit(sides.get(i + 1)), line(ctx), column(ctx));
+        int lado = 1;
+        for (ParseTree hijo : ctx.children) {
+            if (hijo instanceof org.antlr.v4.runtime.tree.TerminalNode terminal) {
+                result = new BinaryOpNode(terminal.getText(), result, visit(sides.get(lado++)), line(ctx), column(ctx));
+            }
         }
         return result;
     }
@@ -317,12 +316,12 @@ public class PigLatinASTBuilder extends PigLatinBaseVisitor<Node> {
     @Override
     public Node visitExpresionAditiva(PigLatinParser.ExpresionAditivaContext ctx) {
         Node result = visit(ctx.expresionMultiplicativa(0));
-        List<org.antlr.v4.runtime.tree.TerminalNode> operators = new ArrayList<>();
-        operators.addAll(ctx.MAS());
-        operators.addAll(ctx.MENOS());
         List<PigLatinParser.ExpresionMultiplicativaContext> sides = ctx.expresionMultiplicativa();
-        for (int i = 0; i < operators.size(); i++) {
-            result = new BinaryOpNode(operators.get(i).getText(), result, visit(sides.get(i + 1)), line(ctx), column(ctx));
+        int lado = 1;
+        for (ParseTree hijo : ctx.children) {
+            if (hijo instanceof org.antlr.v4.runtime.tree.TerminalNode terminal) {
+                result = new BinaryOpNode(terminal.getText(), result, visit(sides.get(lado++)), line(ctx), column(ctx));
+            }
         }
         return result;
     }
@@ -330,12 +329,12 @@ public class PigLatinASTBuilder extends PigLatinBaseVisitor<Node> {
     @Override
     public Node visitExpresionMultiplicativa(PigLatinParser.ExpresionMultiplicativaContext ctx) {
         Node result = visit(ctx.expresionUnaria(0));
-        List<org.antlr.v4.runtime.tree.TerminalNode> operators = new ArrayList<>();
-        operators.addAll(ctx.POR());
-        operators.addAll(ctx.DIV());
         List<PigLatinParser.ExpresionUnariaContext> sides = ctx.expresionUnaria();
-        for (int i = 0; i < operators.size(); i++) {
-            result = new BinaryOpNode(operators.get(i).getText(), result, visit(sides.get(i + 1)), line(ctx), column(ctx));
+        int lado = 1;
+        for (ParseTree hijo : ctx.children) {
+            if (hijo instanceof org.antlr.v4.runtime.tree.TerminalNode terminal) {
+                result = new BinaryOpNode(terminal.getText(), result, visit(sides.get(lado++)), line(ctx), column(ctx));
+            }
         }
         return result;
     }

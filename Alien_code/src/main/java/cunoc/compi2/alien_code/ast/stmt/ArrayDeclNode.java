@@ -13,6 +13,7 @@ import java.util.List;
 public class ArrayDeclNode implements Node {
     public String nombre;
     public int tamano;
+    public int dimensiones = 1;
     public Type tipo;
     public String tipoNombre;
     public List<Node> iniciales;
@@ -63,6 +64,9 @@ public class ArrayDeclNode implements Node {
         }
 
         Symbol simbolo = new Symbol(nombre, tipo, Symbol.Kind.VARIABLE, true, false, false, tamano);
+        simbolo.setDimensiones(dimensiones);
+        simbolo.setLinea(getLine());
+        simbolo.setColumna(getColumn());
         if (tipo == Type.STRUCT || tipo == Type.CLASS) {
             simbolo.setTipoNombre(tipoNombre);
         }

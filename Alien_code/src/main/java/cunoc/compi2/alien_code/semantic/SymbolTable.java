@@ -8,14 +8,20 @@ import java.util.Stack;
 
 public class SymbolTable {
     private final Stack<Scope> scopes;
+    private final List<Symbol> registro;
 
     public SymbolTable() {
         this.scopes = new Stack<>();
+        this.registro = new ArrayList<>();
         enterScope();
     }
 
     public void enterScope() {
         Scope parent = scopes.isEmpty() ? null : scopes.peek();
+        scopes.push(new Scope(parent));
+    }
+
+    public void enterScopeWithin(Scope parent) {
         scopes.push(new Scope(parent));
     }
 
@@ -31,20 +37,23 @@ public class SymbolTable {
 
     public void define(Symbol symbol) {
         scopes.peek().define(symbol);
+        registro.add(symbol);
     }
 
     public Symbol resolve(String name) {
         return scopes.peek().resolve(name);
     }
 
+    public Scope ambitoActual() {
+        return scopes.peek();
+    }
+
     public List<Symbol> listarSimbolos() {
         List<Symbol> simbolos = new ArrayList<>();
         Set<String> vistos = new HashSet<>();
-        for (int i = 0; i < scopes.size(); i++) {
-            for (Symbol simbolo : scopes.get(i).getTodos()) {
-                if (vistos.add(simbolo.getName())) {
-                    simbolos.add(simbolo);
-                }
+        for (Symbol simbolo : registro) {
+            if (vistos.add(simbolo.getName())) {
+                simbolos.add(simbolo);
             }
         }
         return simbolos;

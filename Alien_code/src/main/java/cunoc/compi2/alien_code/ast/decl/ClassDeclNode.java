@@ -6,6 +6,7 @@ import cunoc.compi2.alien_code.ast.Type;
 import cunoc.compi2.alien_code.ast.stmt.VariableDeclNode;
 import cunoc.compi2.alien_code.ir.CodigoContexto;
 import cunoc.compi2.alien_code.semantic.ContextoSemantico;
+import cunoc.compi2.alien_code.semantic.Symbol;
 
 import java.util.List;
 
@@ -45,6 +46,22 @@ public class ClassDeclNode implements Node {
 
     @Override
     public Type analizar(ContextoSemantico ctx) {
-        return null;
+        for (VariableDeclNode attr : atributos) {
+            if (attr.tipo == Type.STRUCT || attr.tipo == Type.CLASS) {
+                Symbol t = ctx.resolver(attr.tipoNombre);
+                if (t == null) {
+                    ctx.registrarError(attr.getLine(), attr.getColumn(),
+                        "El atributo '" + attr.nombre + "' usa el tipo desconocido '" + attr.tipoNombre + "'");
+                }
+            }
+        }
+
+        Symbol propio = ctx.resolver(nombre);
+        ctx.pushClaseActual(propio.getMiembros());
+        for (ConstructorDeclNode c : constructores) ctx.evaluar(c);
+        for (MethodDeclNode m : metodos) ctx.evaluar(m);
+        ctx.popClaseActual();
+
+        return Type.VOID;
     }
 }

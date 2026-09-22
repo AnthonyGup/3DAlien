@@ -5,10 +5,16 @@ import cunoc.compi2.alien_code.ast.Type;
 import cunoc.compi2.alien_code.errors.ErrorListener;
 import cunoc.compi2.alien_code.errors.ErrorType;
 
+import java.util.Deque;
+import java.util.LinkedList;
+
 public class ContextoSemanticoImpl implements ContextoSemantico {
     private final SymbolTable symbolTable;
     private final ErrorListener errorListener;
     private int loopDepth;
+    private int switchDepth;
+    private final Deque<Type> pilaRetornos = new LinkedList<>();
+    private final Deque<Scope> pilaClases = new LinkedList<>();
 
     public ContextoSemanticoImpl(SymbolTable symbolTable, ErrorListener errorListener) {
         this.symbolTable = symbolTable;
@@ -66,5 +72,64 @@ public class ContextoSemanticoImpl implements ContextoSemantico {
     @Override
     public boolean enCiclo() {
         return loopDepth > 0;
+    }
+
+    @Override
+    public Scope ambitoActual() {
+        return symbolTable.ambitoActual();
+    }
+
+    @Override
+    public void pushTipoRetorno(Type tipo) {
+        pilaRetornos.push(tipo);
+    }
+
+    @Override
+    public void popTipoRetorno() {
+        if (!pilaRetornos.isEmpty()) {
+            pilaRetornos.pop();
+        }
+    }
+
+    @Override
+    public Type tipoRetornoActual() {
+        return pilaRetornos.isEmpty() ? null : pilaRetornos.peek();
+    }
+
+    @Override
+    public void entrarSwitch() {
+        switchDepth++;
+    }
+
+    @Override
+    public void salirSwitch() {
+        switchDepth--;
+    }
+
+    @Override
+    public boolean enSwitch() {
+        return switchDepth > 0;
+    }
+
+    @Override
+    public void entrarAmbitoDentroDe(Scope padre) {
+        symbolTable.enterScopeWithin(padre);
+    }
+
+    @Override
+    public void pushClaseActual(Scope miembros) {
+        pilaClases.push(miembros);
+    }
+
+    @Override
+    public void popClaseActual() {
+        if (!pilaClases.isEmpty()) {
+            pilaClases.pop();
+        }
+    }
+
+    @Override
+    public Scope ambitoDeClaseActual() {
+        return pilaClases.isEmpty() ? null : pilaClases.peek();
     }
 }

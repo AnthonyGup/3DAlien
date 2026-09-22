@@ -13,6 +13,7 @@ public class FunctionDeclNode implements Node {
     public String nombre;
     public List<ParameterNode> parametros;
     public Type tipoRetorno;
+    public String tipoRetornoNombre;
     public BlockNode cuerpo;
     private final int line;
     private final int column;
@@ -44,6 +45,16 @@ public class FunctionDeclNode implements Node {
 
     @Override
     public Type analizar(ContextoSemantico ctx) {
-        return null;
+        ctx.entrarAmbito();
+        for (ParameterNode p : parametros) {
+            ctx.evaluar(p);
+        }
+
+        ctx.pushTipoRetorno(tipoRetorno);
+        ctx.evaluar(cuerpo);
+        ctx.popTipoRetorno();
+
+        ctx.salirAmbito();
+        return tipoRetorno;
     }
 }

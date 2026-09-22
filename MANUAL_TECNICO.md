@@ -277,9 +277,9 @@ mvn exec:java               # arranca la GUI (aquí se prueba todo)
 │           │   └── TypeCompat.java                   # reglas de compatibilidad de tipos
 │           ├── pigLatin/astbuilder/PigLatinASTBuilder.java
 │           ├── pigLatin/semantic/PigLatinVocabulary.java
-│           ├── ylang/astbuilder/YLangASTBuilder.java           # esqueleto
+│           ├── ylang/astbuilder/YLangASTBuilder.java           # implementado
 │           ├── ylang/semantic/YLangVocabulary.java
-│           ├── zetariano/astbuilder/ZetarianoASTBuilder.java   # esqueleto
+│           ├── zetariano/astbuilder/ZetarianoASTBuilder.java   # implementado
 │           ├── zetariano/semantic/ZetarianoVocabulary.java
 │           ├── ir/        CodigoContexto, Cuarteta, IntermediateCodeGenerator
 │           ├── c3d/       C3DInstruction, C3DGenerator
@@ -314,25 +314,24 @@ public interface Node {
     String traducir(CodigoContexto ctx);   // generación de cuartetas (HOY return null)
     int getLine();                          // línea base 1
     int getColumn();                        // columna base 1
-    Type analizar(ContextoSemantico ctx);   // semántica (23 nodos hechos; `decl` stub)
+    Type analizar(ContextoSemantico ctx);   // semántica (34/34 nodos implementados)
 }
 ```
 
 ### 6.2 `Type` (enum compartido)
 
-Valores: `INT, FLOAT, STRING, BOOL, CHAR, VOID, STRUCT, CLASS, ARRAY`.
+Valores: `INT, FLOAT, STRING, BOOL, CHAR, VOID, STRUCT, CLASS, ARRAY, NULL`
+(`NULL` = literal `null` de Zetariano; ver reglas en `TypeCompat`).
 
 Mapeos estáticos (con `name.toLowerCase()`):
 - `fromPigLatin`: `numerus`→INT, `decimalis`→FLOAT, `textum`→STRING, `littera`→CHAR,
   `bool`→BOOL.
 - `fromZetariano`: `int`→INT, `double`→FLOAT, `string`→STRING, `boolean`→BOOL,
   `char`→CHAR, `void`→VOID.
-- `fromYLang`: `entero`→INT, `decimal`→FLOAT, `texto`→STRING, `booleano`→BOOL,
-  `caracter`→CHAR, `vacio`→VOID.
+- `fromYLang`: `entero`→INT, `flotante`→FLOAT, `cadena`→STRING, `bool`→BOOL,
+  `caracter`→CHAR (verificado contra `YLangLexer.g4`; la gramática no tiene `vacio`, así
+  que no hay mapeo a `VOID`).
 
-- [ ] **PENDIENTE**: `fromYLang` usa nombres del borrador viejo. El spec usa
-      `flotante`→FLOAT, `cadena`→STRING, `bool`→BOOL. Hay que alinear (mantener o no los
-      antiguos es decisión del plan; el spec manda).
 - [ ] **PENDIENTE**: no existe mapeo para `ARRAY` ni para buscar tipos con nombre
       definido en otro archivo (STRUCT/CLASS) — los builders resuelven eso con
       `Type.STRUCT`/`Type.CLASS` + `tipoNombre`/`nombreClase`.
@@ -349,7 +348,9 @@ Interfaz con un método por tipo de nodo. Todos son `default` y devuelven `null`
 `visitIf`, `visitElseIf`, `visitLiteral`, `visitBinaryOp`, `visitUnaryOp`,
 `visitStructDecl(StructDeclNode)`, `visitFunctionDecl(FunctionDeclNode)`,
 `visitClassDecl(ClassDeclNode)`, `visitConstructorDecl(ConstructorDeclNode)`,
-`visitMethodDecl(MethodDeclNode)`, `visitParameter(ParameterNode)`.
+`visitMethodDecl(MethodDeclNode)`, `visitParameter(ParameterNode)`,
+`visitReturn(ReturnNode)`, `visitSwitch(SwitchNode)`, `visitCase(CaseNode)`,
+`visitConditional(ConditionalNode)`, `visitNewArray(NewArrayNode)`.
 
 ---
 
@@ -357,8 +358,8 @@ Interfaz con un método por tipo de nodo. Todos son `default` y devuelven `null`
 
 Convención: campos públicos (POJO), línea/columna `final private` con getters. Cada nodo
 implementa `accept` (con su `visit...`), `getLine` y `getColumn`. `traducir` **sigue como
-stub** (`return null`) en todos. `analizar` está implementado en los nodos de la fase
-semántica de Pig Latin (ver 8.7–8.8); en `decl` sigue stub.
+stub** (`return null`) en todos. `analizar` está implementado en los **34 nodos**
+(fases Pig Latin + Y? + Zetariano, ver 8.7–8.8).
 
 ### 7.1 `program`
 
@@ -376,32 +377,34 @@ superior + (para Pig Latin) las sentencias de `MAIOR>`.
 | Clase | Campos públicos | Constructor |
 |---|---|---|
 | `StructDeclNode` | `String nombre`, `List<VariableDeclNode> campos` | `(nombre, campos, line, col)` |
-| `FunctionDeclNode` | `String nombre`, `List<ParameterNode> parametros`, `Type tipoRetorno`, `BlockNode cuerpo` | `(nombre, parametros, tipoRetorno, cuerpo, line, col)` |
+| `FunctionDeclNode` | `String nombre`, `List<ParameterNode> parametros`, `Type tipoRetorno`, `String tipoRetornoNombre` (null salvo STRUCT/CLASS), `BlockNode cuerpo` | `(nombre, parametros, tipoRetorno, cuerpo, line, col)`; `tipoRetornoNombre` se asigna post-construcción |
 | `ClassDeclNode` | `String nombre`, `List<VariableDeclNode> atributos`, `List<ConstructorDeclNode> constructores`, `List<MethodDeclNode> metodos` | `(nombre, atributos, constructores, metodos, line, col)` |
 | `ConstructorDeclNode` | `List<ParameterNode> parametros`, `BlockNode cuerpo` | `(parametros, cuerpo, line, col)` |
-| `MethodDeclNode` | `String nombre`, `List<ParameterNode> parametros`, `Type tipoRetorno`, `BlockNode cuerpo` | `(nombre, parametros, tipoRetorno, cuerpo, line, col)` |
-| `ParameterNode` | `Type tipo`, `String nombre`, `boolean porReferencia` | `(tipo, nombre, porReferencia, line, col)` |
+| `MethodDeclNode` | `String nombre`, `List<ParameterNode> parametros`, `Type tipoRetorno`, `String tipoRetornoNombre`, `Type tipoRetornoElemento` (solo si retorna arreglo), `BlockNode cuerpo` | `(nombre, parametros, tipoRetorno, cuerpo, line, col)`; los dos extras se asignan post-construcción. `analizar` valida `return` contra `tipoRetornoElemento` cuando retorna arreglo |
+| `ParameterNode` | `Type tipo`, `String nombre`, `boolean porReferencia`, `String tipoNombre`, `Type tipoElemento` (solo arreglo), `int dimensiones` (1 por defecto) | `(tipo, nombre, porReferencia, tipoNombre, line, col)` (`tipoNombre` = nombre del tipo si es STRUCT/CLASS); `tipoElemento`/`dimensiones` se asignan post-construcción |
 
-`tipoRetorno == null` significa "sin retorno" (Y? sin `->`, método `void`) → se trata como
-`VOID` (ver `SemanticAnalyzer.registrarFirma`).
+`tipoRetorno == null` significa "sin retorno" (Y? sin `->`, método `void`); el Pase A lo
+guarda tal cual y `ReturnNode` lo interpreta como "no debe retornar valor".
 
 ### 7.3 `expr`
 
 | Clase | Campos públicos | Constructor / notas |
 |---|---|---|
-| `AccessNode` | `String nombre`, `List<Sufijo> sufijos` | `(nombre, line, col)`; método `conSufijos()`. `Sufijo` interno: `enum Tipo {CAMPO, INDICE, LLAMADA}`, campos `tipo`, `nombreCampo`, `indice` (Node), `argumentos` (List<Node>); factories estáticas `Sufijo.campo(name)`, `Sufijo.indice(node)`, `Sufijo.llamada(list)` |
-| `BinaryOpNode` | `String operador`, `Node izquierda`, `Node derecha` | `(operador, izquierda, derecha, line, col)`. `operador` guarda el texto crudo: `||`, `&&`, `==`, `!=`, `<`, `>`, `<=`, `>=`, `+`, `-`, `*`, `/`, (y a futuro `%`) |
+| `AccessNode` | `String nombre`, `List<Sufijo> sufijos` | `(nombre, line, col)`; método `conSufijos()`. `Sufijo` interno: `enum Tipo {CAMPO, INDICE, LLAMADA}`, campos `tipo`, `nombreCampo`, `indice` (Node), `argumentos` (List<Node>); factories estáticas `Sufijo.campo(name)`, `Sufijo.indice(node)`, `Sufijo.llamada(list)`. Estáticos de apoyo: `tiposDeArgumentos(ctx, args)` (evalúa y mapea accesos a símbolos arreglo → `ARRAY`, usado también por `NewObjectNode`) y `resolverSimbolo(ctx, acceso)` (resuelve el símbolo final sin reportar errores; `null` si hay llamada o algo falla) |
+| `BinaryOpNode` | `String operador`, `Node izquierda`, `Node derecha` | `(operador, izquierda, derecha, line, col)`. `operador` guarda el texto crudo: `||`, `&&`, `==`, `!=`, `<`, `>`, `<=`, `>=`, `+`, `-`, `*`, `/`, `%` |
 | `UnaryOpNode` | `String operador`, `Node operando` | `(operador, operando, line, col)`. `operador`: `non`, `!` o `-` |
-| `LiteralNode` | `enum Clase {ENTERO, DECIMAL, CADENA, CARACTER, BOOLEANO}`, `Clase clase`, `String valor` | `(clase, valor, line, col)`. `valor` es el texto crudo (incluye comillas para CADENA/CARACTER si así lo emite el builder) |
-| `NewObjectNode` | `String nombreClase`, `List<Node> argumentos` | `(nombreClase, argumentos, line, col)`. Instancia de objeto (`new Clase(...)` / `novus Clase(...)`) |
+| `LiteralNode` | `enum Clase {ENTERO, DECIMAL, CADENA, CARACTER, BOOLEANO, NULO}`, `Clase clase`, `String valor` | `(clase, valor, line, col)`. `valor` es el texto crudo (incluye comillas para CADENA/CARACTER si así lo emite el builder). `NULO` → `Type.NULL` |
+| `NewObjectNode` | `String nombreClase`, `List<Node> argumentos` | `(nombreClase, argumentos, line, col)`. Instancia de objeto (`new Clase(...)` / `novus Clase(...)`); valida contra `firmasConstructores` del `Symbol` |
 | `StructLiteralNode` | `List<Node> valores` | `(valores, line, col)`. Literal `{...}` posicional (estructura o arreglo según contexto) |
+| `ConditionalNode` | `Node condicion`, `Node siVerdadero`, `Node siFalso` | `(condicion, siVerdadero, siFalso, line, col)`. Ternario `a ? b : c` de Zetariano |
+| `NewArrayNode` | `Type tipoElemento`, `String tipoNombreElemento` (null si primitivo), `List<Node> dimensiones` | `(tipoElemento, dimensiones, line, col)` o `(tipoElemento, tipoNombreElemento, dimensiones, line, col)`. `new int[5]`, `new int[3][3]`, `new Clase[n]` |
 
 ### 7.4 `stmt`
 
 | Clase | Campos públicos | Constructor |
 |---|---|---|
-| `VariableDeclNode` | `String nombre`, `Type tipo`, `String tipoNombre`, `Node inicial` | `(nombre, tipo, tipoNombre, inicial, line, col)` |
-| `ArrayDeclNode` | `String nombre`, `int tamano`, `Type tipo`, `String tipoNombre`, `List<Node> iniciales` | `(nombre, tamano, tipo, tipoNombre, iniciales, line, col)` |
+| `VariableDeclNode` | `String nombre`, `Type tipo`, `String tipoNombre`, `Type tipoElemento` (null salvo arreglo), `int dimensiones` (1 por defecto), `Node inicial` | `(nombre, tipo, tipoNombre, inicial, line, col)`. Declaración estilo Zetariano (`int[] x = ...`) usa `tipo=ARRAY` + `tipoElemento` + `dimensiones`; si `inicial` es `NewArrayNode`/`StructLiteralNode` se valida contra el elemento; si es acceso a otro arreglo (`int[] b = a`) se acepta y se valida el elemento |
+| `ArrayDeclNode` | `String nombre`, `int tamano`, `int dimensiones` (1 por defecto), `Type tipo`, `String tipoNombre`, `List<Node> iniciales` | `(nombre, tamano, tipo, tipoNombre, iniciales, line, col)` |
 | `AssignmentNode` | `AccessNode destino`, `Node valor` | `(destino, valor, line, col)` |
 | `IncrementNode` | `AccessNode objetivo` | `(objetivo, line, col)` |
 | `DecrementNode` | `AccessNode objetivo` | `(objetivo, line, col)` |
@@ -415,6 +418,9 @@ superior + (para Pig Latin) las sentencias de `MAIOR>`.
 | `ContinueNode` | — | `(line, col)` |
 | `PrintNode` | `List<Node> expresiones` | `(expresiones, line, col)` — imprime varias expresiones encadenadas (`>> a >> b`) |
 | `ReadNode` | `AccessNode destino` (puede ser `null`: `<< ;` sin variable) | `(destino, line, col)` |
+| `ReturnNode` | `Node expresion` (null si no retorna nada) | `(expresion, line, col)`. Valida contra `ctx.tipoRetornoActual()` |
+| `SwitchNode` | `Node expresion`, `List<CaseNode> casos` | `(expresion, casos, line, col)`. Activa `entrarSwitch` para sus casos |
+| `CaseNode` | `Node valor` (null = `siempre`/`default`), `List<Node> sentencias` | `(valor, sentencias, line, col)`; `esSiempre() = valor==null` |
 
 NOTA `tipoNombre`: en `VariableDeclNode`/`ArrayDeclNode`/`ParameterNode` y builders de Pig
 Latin se usa cuando el tipo es un identificador (estructura/clase): `tipo=Type.STRUCT` y
@@ -428,16 +434,16 @@ Cada gap requiere decidir un nodo nuevo o un desglose ("desugar") dentro del bui
 
 | # | Feature (de qué gramática) | Gap | Opciones a decidir |
 |---|---|---|---|
-| 1 | `retornar expr` (Y?), `return expr?` (Z) | No existe `ReturnNode` | Nodo nuevo `ReturnNode(Node expr)` |
-| 2 | `elegir`/`caso`/`siempre` (Y?), `switch`/`case`/`default` (Z) | No existe nodo switch | Nodo nuevo `SwitchNode` (o reutilizar `IfNode` encadenado en el builder, aunque el spec exige fallthrough) |
-| 3 | Ternario `a ? b : c` (Z) | No existe expresión condicional | Nodo nuevo `ConditionalNode` |
-| 4 | `null` (Z) | `LiteralNode.Clase` no tiene NULO | Agregar `Clase.NULO` (o nodo `NullNode`) |
-| 5 | `new int[5]`, `new int[3][3]`, `new Clase[]` (Z) | `NewObjectNode` solo instancia objetos con `(...)` | Nodo nuevo para creación de arreglo |
-| 6 | Asignación compuesta `+=` `-=` `*=` (Z) | `AssignmentNode` solo `=` | Desugar a `destino = destino op valor` o nodo nuevo |
-| 7 | Arreglos multidimensionales `entero m[3][3]` (Y), `int[][]` (Z) | `ArrayDeclNode.tamano` es un solo `int`; `VariableDeclNode` no guarda dims | Agregar `List<Integer> dimensiones` (o nodo/tipo `ARRAY` anidado) |
-| 8 | Caracteres/arreglos en **campos de estructura y parámetros** (Y: `tipoCampo IDENTIFICADOR ([N])*`; Z: `int[] arr`) | Campos y parámetros usan `VariableDeclNode`/`ParameterNode` sin dims | Soporte de dimensiones en campos/parámetros |
-| 9 | Cuerpo sin llaves de `if`/`for`/`while`/`do` (Z) | Los cuerpos son `BlockNode` | Envolver la sentencia única en `BlockNode` de 1 elemento (decisión del builder) |
-| 10 | `imprimir(...)`/`leer()` (Y) | Están cubiertos por `AccessNode` con sufijo LLAMADA, pero requieren resolución como built-in en semántica | Marcar en semántica, no en AST |
+| 1 | `retornar expr` (Y?), `return expr?` (Z) | **RESUELTO**: `stmt/ReturnNode.java` + mapeo en ambos builders | — |
+| 2 | `elegir`/`caso`/`siempre` (Y?), `switch`/`case`/`default` (Z) | **RESUELTO**: `stmt/SwitchNode.java` + `stmt/CaseNode.java` + mapeo en ambos builders; `BreakNode` acepta `enSwitch()` | — |
+| 3 | Ternario `a ? b : c` (Z) | **RESUELTO**: `expr/ConditionalNode.java` + mapeo (`expresionOr (INTERROGACION ...)?`) | — |
+| 4 | `null` (Z) | **RESUELTO**: `Clase.NULO` + `Type.NULL` + reglas en `TypeCompat` + mapeo | — |
+| 5 | `new int[5]`, `new int[3][3]`, `new Clase[]` (Z) | **RESUELTO**: `expr/NewArrayNode.java` (`tipoElemento` + `tipoNombreElemento` opcional + `dimensiones`) + mapeo | — |
+| 6 | Asignación compuesta `+=` `-=` `*=` (Z) | **RESUELTO**: desugar en `ZetarianoASTBuilder.visitAsignacionCompuesta` (`destino = destino op valor`, comparte la lista de sufijos) | — |
+| 7 | Arreglos multidimensionales `entero m[3][3]` (Y), `int[][]` (Z) | **RESUELTO**: modelo `tipoElemento` + `dimensiones` en `VariableDeclNode`/`ArrayDeclNode`/`ParameterNode`/`Symbol`; declaraciones estilo Zetariano (`tipo arrayDims? IDENTIFICADOR (= expr)?`) van a `VariableDeclNode(tipo=ARRAY, ...)`; `ArrayDeclNode` queda para estilo Y?/Pig Latin (`name[N]`, `tamano` = producto de dims) | — |
+| 8 | Caracteres/arreglos en **campos de estructura y parámetros** (Y: `tipoCampo IDENTIFICADOR ([N])*`; Z: `int[] arr`) | **RESUELTO**: campos vía `VariableDeclNode` (con dims); parámetros vía `ParameterNode.tipoElemento`+`dimensiones` | — |
+| 9 | Cuerpo sin llaves de `if`/`for`/`while`/`do` (Z) | **RESUELTO**: `cuerpoOSentencia` envuelve la sentencia única en `BlockNode` de 1 elemento | — |
+| 10 | `imprimir(...)`/`leer()` (Y), `println` (Z) | **RESUELTO**: símbolos nativos (`SemanticAnalyzer.registrarNativas`, `Symbol.isNativa`, rama en `AccessNode` que retorna el tipo sin validar args) | — |
 | 11 | `for` con `forInit` opcional o como asignación (Z) | `ForNode.inicial` es `Node`, cubre ambos | Sin gap estructural (decisiones del builder) |
 
 Este manual NO decide los gaps: el planificador elige el diseño más simple y lo justifica
@@ -459,15 +465,43 @@ public class Symbol {
     public boolean isArray(); public boolean isParameter(); public boolean isField();
     public int getSize();  // arreglo → tamaño; struct/función/clase → nº de campos/params/atributos
 
-    // Adiciones de la fase semántica (no rompen el constructor ni las llamadas existentes):
+    // Adiciones de las fases semánticas (no rompen el constructor ni las llamadas existentes):
     public String getTipoNombre(); public void setTipoNombre(String tipoNombre);
     public Scope getMiembros();   public void setMiembros(Scope miembros);
+    public java.util.List<Type> getTiposParametros();       // firma única (FUNCION de Y?)
+    public void agregarFirma(java.util.List<Type> tipos);   // una por sobrecarga (METODO)
+    public void agregarFirmaConstructor(java.util.List<Type> tipos);  // (CLASE)
+    public boolean tieneFirmaCompatible(java.util.List<Type> argumentos);
+    public boolean tieneConstructorCompatible(java.util.List<Type> argumentos);
+    public boolean isNativa(); public void setNativa(boolean nativa); // built-ins (imprimir/leer/println)
+    public int getLinea(); public void setLinea(int linea);           // posición para el reporte UI
+    public int getColumna(); public void setColumna(int columna);
+    public int getDimensiones(); public void setDimensiones(int d);   // nº de dims (arreglos)
+    public static Symbol variable(String nombre, Type tipoDeclarado, Type tipoElemento,
+        String tipoNombre, int dimensiones, boolean isParameter, boolean isField,
+        int line, int column);   // factory: si es ARRAY guarda el ELEMENTO en `type`
 }
 ```
 
 `tipoNombre` guarda el nombre real cuando `type` es `STRUCT`/`CLASS` (si no, `null`).
-`miembros` es el `Scope` con los campos/métodos/constructores, adjuntado por
+`miembros` es el `Scope` con los campos/métodos, adjuntado por
 `SemanticAnalyzer.paseA` solo a los símbolos `ESTRUCTURA`/`CLASE`.
+`tiposParametros` guarda la firma única de una `FUNCION`;
+`firmas`/`firmasConstructores` guardan las N firmas de un `METODO` sobrecargado y los
+constructores de una `CLASE` (los constructores **no** viven en `miembros` porque se
+acceden con `new`, no con `.`). Todas las sobrecargas de un método comparten el `type`
+(retorno): solo varía la lista de parámetros. La comparación usa
+`TypeCompat.esAsignable` por posición (con `null` = comodín por error ya reportado).
+
+**Modelo de arreglos:** un símbolo arreglo guarda el tipo del **elemento** en `type`,
+`isArray=true` y el nº de dimensiones en `dimensiones` (0 = no es arreglo). Por eso una
+variable arreglo **evalúa** a su tipo elemento (`ctx.evaluar(arr)` → `INT` para `int[]`),
+y `Type.ARRAY` solo aparece como tipo declarado (`VariableDeclNode.tipo`), resultado de
+`NewArrayNode`/`NewArrayNode`-como-argumento, o retorno declarado de arreglo. Al validar
+llamadas, `AccessNode.tiposDeArgumentos` mapea accesos a símbolos arreglo → `ARRAY`
+(ver 7.3). Limitación menor: `Symbol.variable()` fija `size=0`, así que los arreglos
+declarados vía `VariableDeclNode` (campos Y?, estilo Zetariano) no conservan el tamaño
+declarado (solo `ArrayDeclNode` lo guarda en `size`).
 
 ### 8.2 `Scope`
 
@@ -475,17 +509,23 @@ public class Symbol {
 además agrega a una lista `orden`, de modo que `getTodos()` devuelve los símbolos **en
 orden de declaración** y **conserva los duplicados** por nombre (necesario para los
 constructores, que comparten el nombre de la clase). `getTodos()` es la base de
-`StructLiteralNode.validarContra` y del filtro de constructores en `NewObjectNode`.
+`StructLiteralNode.validarContra`. `resolveLocal(name)` busca **solo** en el ámbito
+propio (sin subir al padre): se usa en `registrarClase` para distinguir sobrecarga
+(agregar firma) de método nuevo (crear `Symbol`).
 
 ### 8.3 `SymbolTable`
 
-Pila de `Scope` (en el constructor ya entra el ámbito global). API:
+Pila de `Scope` (en el constructor ya entra el ámbito global) + `registro` permanente
+(con cada `Symbol` definido, aunque su ámbito ya se haya cerrado). API:
 
 - `enterScope()`, `exitScope()` (no desapila el último: el global nunca se cierra).
-- `isDefinedInCurrentScope(name)`, `define(symbol)`, `resolve(name)`
-  (del ámbito actual hacia afuera).
-- `listarSimbolos()` → `List<Symbol>` deduplicada por nombre (recorre ámbitos
-  abajo→arriba), usada por el reporte de la tabla de símbolos de la UI.
+- `enterScopeWithin(Scope padre)` (el nuevo ámbito cuelga del padre dado, no del activo).
+- `ambitoActual()` (el `Scope` en el tope, para capturarlo antes de salir de él).
+- `isDefinedInCurrentScope(name)`, `define(symbol)` (además agrega a `registro`),
+  `resolve(name)` (del ámbito actual hacia afuera).
+- `listarSimbolos()` → `List<Symbol>` deduplicada por nombre (recorre `registro`),
+  usada por el reporte de la tabla de símbolos de la UI. Incluye locales, parámetros y
+  nativas; las sobrecargas aparecen una sola vez (comparten `Symbol`).
 
 ### 8.4 `ContextoSemantico` (interfaz) y `ContextoSemanticoImpl`
 
@@ -493,15 +533,25 @@ Pila de `Scope` (en el constructor ya entra el ámbito global). API:
 public interface ContextoSemantico {
     Type evaluar(Node nodo);            // nodo.analizar(this)
     void entrarAmbito();  void salirAmbito();
+    void entrarAmbitoDentroDe(Scope padre);   // el nuevo ámbito cuelga de `padre`
+    Scope ambitoActual();
     boolean definir(Symbol simbolo);    // false si ya existe en el ámbito actual
     Symbol resolver(String nombre);
     void registrarError(int linea, int columna, String mensaje);   // ErrorType.SEMANTICO
     void entrarCiclo();  void salirCiclo();  boolean enCiclo();     // para romper/continuar
+    void entrarSwitch(); void salirSwitch(); boolean enSwitch();   // `romper` vale en elegir aunque no haya ciclo
+    void pushTipoRetorno(Type t); void popTipoRetorno(); Type tipoRetornoActual();  // pila (t=null: sin retorno)
+    void pushClaseActual(Scope miembros);       // pila (clases anidadas)
+    void popClaseActual();
+    Scope ambitoDeClaseActual();
 }
 ```
 
-`ContextoSemanticoImpl` implementa todo sobre `SymbolTable` + `ErrorListener`, con un
-contador `loopDepth`. También expone `getSymbolTable()`.
+`ContextoSemanticoImpl` implementa todo sobre `SymbolTable` + `ErrorListener`, con
+contadores `loopDepth`/`switchDepth`, una pila de retornos (`LinkedList`, admite `null`)
+y una pila de ámbitos de clase. También expone `getSymbolTable()`.
+`entrarAmbitoDentroDe` permite que el cuerpo de un método/constructor "cuelgue" del
+ámbito de miembros de su clase: así `nombre = x;` resuelve el atributo **sin** `this.`.
 
 ### 8.5 `SemanticAnalyzer` (fachada del pipeline)
 
@@ -515,17 +565,29 @@ public class SemanticAnalyzer {
 }
 ```
 
-`paseA` → para cada `programa.declarations`, `registrarFirma(nodo)`. **Los miembros ya no se
-descartan:** se construye un `Scope` propio (padre `null`), se define ahí cada miembro y el
-`Scope` queda adjunto al símbolo con `setMiembros(...)`:
-- `StructDeclNode`: define `(nombre, STRUCT, ESTRUCTURA, size=campos.size)`; crea el `Scope`
-  de miembros; define cada campo `(campo.nombre, campo.tipo, VARIABLE, isField=true)` con
-  `setTipoNombre` si el campo es `STRUCT`/`CLASS`; `simbolo.setMiembros(scope)`.
-- `FunctionDeclNode`: define `(nombre, retorno ?? VOID, FUNCION, size=parametros.size)`.
-- `ClassDeclNode`: define `(nombre, CLASS, CLASE, size=atributos.size)`; crea el `Scope` de
-  miembros; define atributos (VARIABLE, isField), métodos `(nombre, retorno, METODO)` y
-  constructores `(clase.nombre, VOID, CONSTRUCTOR, size=parametros.size)`;
-  `simbolo.setMiembros(scope)`.
+`analizar(programas)` = `paseA` + `registrarNativas` + `paseB`.
+`registrarNativas`: si algún programa es `"Y?"`, define `imprimir` (VOID) y `leer`
+(type `null`) como `FUNCION` nativas; si alguno es `"Zetariano"`, define `println`
+(VOID) nativa. `AccessNode` retorna el tipo de una nativa sin validar argumentos (pero
+sí los evalúa, para que sus errores internos afloren). Si el usuario declara su propia
+función con el mismo nombre, la suya gana (el `definir` de la nativa falla en silencio).
+
+`paseA` → para cada `programa.declarations`, según su tipo (campos/atributos siempre vía
+`Symbol.variable`, que guarda elemento+dims+línea):
+- `registrarEstructura(StructDeclNode)`: `entrarAmbito`, define cada campo
+  (error "Campo duplicado" si se repite), captura `ambitoActual`,
+  `salirAmbito`, define `(nombre, STRUCT, ESTRUCTURA, size=campos.size)` con
+  `setMiembros(scope)` + línea/columna (error "ya fue declarada" si se repite).
+- `registrarFuncion(FunctionDeclNode)`: define `(nombre, tipoRetorno, FUNCION,
+  size=parametros.size)` guardando `tiposParametros` en el `Symbol` (+ `tipoNombre` si
+  retorna STRUCT/CLASS y línea/columna; error "ya fue declarada" si se repite).
+- `registrarClase(ClassDeclNode)`: `entrarAmbito`, define atributos (error "Atributo
+  duplicado"); por cada método busca `resolveLocal(nombre)`: si no existe crea el
+  `Symbol METODO` con su primera firma, si existe le agrega la firma (sobrecarga);
+  captura `ambitoActual`, `salirAmbito`, define `(nombre, CLASS, CLASE,
+  size=atributos.size)` con `setMiembros(scope)`, línea/columna y
+  `agregarFirmaConstructor` por cada constructor (los constructores **no** van a
+  `miembros`).
 
 `paseB` → `programa.analizar(contexto)` para cada programa (los bodies ya pueden resolver).
 
@@ -545,42 +607,95 @@ que delega en `Type.from<Idioma>`. Son la única duplicación legítima.
     ver 8.8). Los campos/`traducir` siguen igual.
   - Regla transversal: `null` = "tipo desconocido, error ya reportado" → se propaga sin
     generar un segundo error.
-- **Pendiente:**
-  - `analizar()` en los nodos `decl` (`StructDeclNode`, `FunctionDeclNode`,
-    `ClassDeclNode`, `MethodDeclNode`, `ConstructorDeclNode`, `ParameterNode`): sin esto
-    los **cuerpos de funciones/métodos no se analizan**.
-  - Validación de firmas por **tipos** (no solo cantidad): requiere `List<Type>
-    tiposParametros` en `Symbol` para `FUNCION`/`METODO`.
-  - Built-ins `imprimir`/`leer` en Y? (para Pig Latin van por `PrintNode`/`ReadNode`).
-  - Alcance semántico para árboles de Y? y Zetariano (sus builders están esqueleto).
-- La tabla de compatibilidad de tipos (antes "pendiente") ahora vive en
-  `semantic/TypeCompat`: único ensanchamiento `INT`→`FLOAT`; `+` sobre `STRING` concatena;
-  comparación `==`/`!=` admite iguales o numéricos; `<`/`>` solo numéricos.
+- **Hecho (fase semántica Y?, spec `Semantico_YLang.md`):**
+  - `Symbol` + `tiposParametros`/`porReferencia`; `ParameterNode` + `tipoNombre`.
+  - `ContextoSemantico`: `ambitoActual`, pila de retornos
+    (`pushTipoRetorno`/`popTipoRetorno`/`tipoRetornoActual`), `entrarSwitch`/`salirSwitch`/
+    `enSwitch`.
+  - Nodos nuevos `ReturnNode`, `SwitchNode`, `CaseNode` (con `analizar` y visitor).
+  - `registrarEstructura`/`registrarFuncion` en Pase A (errores de duplicados + firmas).
+  - `analizar` en `StructDeclNode` (valida campos STRUCT contra la tabla),
+    `ParameterNode` (solo ARRAY/STRUCT/CLASS por referencia + define la local) y
+    `FunctionDeclNode` (ámbito + parámetros + cuerpo con retorno esperado).
+  - `BreakNode` acepta `enSwitch()`; `ContinueNode` sigue exigiendo solo ciclo.
+  - `AccessNode` (rama LLAMADA a función) valida cantidad y tipo de argumentos contra
+    `tiposParametros` con `esAsignable`.
+- **Hecho (fase semántica Zetariano, spec `Semantico_Zetariano.md`):**
+  - `Type.NULL` + `LiteralNode.Clase.NULO` + reglas en `TypeCompat` (`null` asignable a
+    STRUCT/CLASS y comparable con `==`/`!=` contra ellos; cubre `if(p1 == null)`).
+  - `Symbol` + `firmas`/`firmasPorReferencia`/`firmasConstructores` con
+    `tieneFirmaCompatible`/`tieneConstructorCompatible`; `Scope.resolveLocal`.
+  - `ContextoSemantico`: `entrarAmbitoDentroDe`, pila de clase actual
+    (`pushClaseActual`/`popClaseActual`/`ambitoDeClaseActual`).
+  - `registrarClase` en Pase A (atributos + métodos con sobrecarga + firmas de
+    constructores).
+  - `analizar` en `ClassDeclNode` (valida atributos STRUCT/CLASS + evalúa
+    constructores/métodos con la clase actual), `ConstructorDeclNode` y
+    `MethodDeclNode` (cuerpo colgado de los miembros: atributos visibles sin `this.`).
+  - `NewObjectNode` valida contra `firmasConstructores`; `AccessNode` (rama LLAMADA a
+    método) valida contra `tieneFirmaCompatible`.
+  - Nodos nuevos `ConditionalNode` (ternario) y `NewArrayNode` (con `analizar` y visitor);
+    `BinaryOpNode` soporta `%`.
+  - Decisión de arreglos (§2.3 del spec): Zetariano declara `tipo arrayDims?
+    IDENTIFICADOR (= expr)?` (corchetes en el tipo, sin tamaño) → `ZetarianoASTBuilder`
+    lo mapea a `VariableDeclNode(tipo=ARRAY, tipoElemento=..., dimensiones=N)`;
+    `ArrayDeclNode` queda para estilo Y?/Pig Latin (`name[N]`). `NewArrayNode` lleva
+    `tipoNombreElemento` opcional para `new Clase[n]`.
+- **Completado (verificado con `ejemplo.y`, `Persona.z` y pruebas negativas):**
+  - `YLangASTBuilder`/`ZetarianoASTBuilder` implementados: emiten árboles reales de
+    `.y`/`.z` (`retornar`/`return`, `elegir`/`switch`, ternario, `null`, `new` de
+    arreglos, dims y multidim, cuerpos sin llaves, `%`, `+=`/`-=`/`*=` en Z).
+  - `Type.fromYLang` verificado contra `YLangLexer.g4`
+    (`entero`/`flotante`/`cadena`/`bool`/`caracter`; no existe `vacio` en la gramática).
+  - Built-ins `imprimir`/`leer` (Y?) y `println` (Z) registrados como símbolos nativos
+    (`SemanticAnalyzer.registrarNativas`, rama `isNativa` en `AccessNode`).
+- **Correcciones de alineación (post-revisión):**
+  - Los 3 builders recorren `ctx.children` en orden al armar `BinaryOpNode` en
+    igualdad/relacional/aditiva/multiplicativa (antes agrupaban por tipo de operador y
+    `a - b + c` se armaba mal).
+  - Arreglos como valor: `int[] b = a` aceptado (con chequeo de elemento);
+    `f(arr)`/`new P(arr)` aceptados para parámetros `ARRAY` (`tiposDeArgumentos` mapea
+    accesos a símbolos arreglo); literal `{...}` aceptado para `ARRAY` en llamadas a
+    `FUNCION`.
+  - `ParameterNode.dimensiones` (params `int[][]` conservan la cuenta).
+  - `UnaryOpNode` acepta `"!"` además de `"non"`; los builders Y/Z pasan el texto crudo.
+- **Pendiente (menor):**
+  - `Symbol.variable()` fija `size=0`: sin chequeo de conteo al asignar literales a
+    arreglos declarados vía `VariableDeclNode`.
+  - Llamadas con literal `{...}` a parámetros de sobrecargas/métodos/constructores no
+    validan elementos; `StructDeclNode.analizar` solo valida campos `STRUCT` (no `CLASS`).
+  - Colisión de nombre entre función de usuario y nativa: gana la del usuario en silencio.
+- La tabla de compatibilidad de tipos vive en `semantic/TypeCompat`: único
+  ensanchamiento `INT`→`FLOAT`; `+` sobre `STRING` concatena; comparación `==`/`!=`
+  admite iguales, numéricos o `NULL` contra STRUCT/CLASS; `<`/`>` solo numéricos.
 
-### 8.8 Nodos con `analizar()` implementado (fase Pig Latin)
+### 8.8 Nodos con `analizar()` implementado (34/34: fases Pig Latin + Y? + Zetariano)
 
 | Grupo | Nodos |
 |---|---|
 | Raíz | `ProgramNode`, `ImportNode`, `BlockNode` |
-| Declaraciones | `VariableDeclNode`, `ArrayDeclNode`, `StructLiteralNode` (+ `validarContra(Symbol,ContextoSemantico)`) |
-| Expresiones | `LiteralNode`, `BinaryOpNode`, `UnaryOpNode`, `AccessNode`, `NewObjectNode` |
-| Sentencias | `AssignmentNode`, `IncrementNode`, `DecrementNode`, `IfNode`, `ElseIfNode`, `WhileNode`, `DoWhileNode`, `ForNode`, `BreakNode`, `ContinueNode`, `PrintNode`, `ReadNode` |
+| Declaraciones | `VariableDeclNode`, `ArrayDeclNode`, `StructLiteralNode` (+ `validarContra(Symbol,ContextoSemantico)`), `StructDeclNode`, `FunctionDeclNode`, `ClassDeclNode`, `ConstructorDeclNode`, `MethodDeclNode`, `ParameterNode` |
+| Expresiones | `LiteralNode`, `BinaryOpNode`, `UnaryOpNode`, `AccessNode`, `NewObjectNode`, `ConditionalNode`, `NewArrayNode` |
+| Sentencias | `AssignmentNode`, `IncrementNode`, `DecrementNode`, `IfNode`, `ElseIfNode`, `WhileNode`, `DoWhileNode`, `ForNode`, `BreakNode`, `ContinueNode`, `PrintNode`, `ReadNode`, `ReturnNode`, `SwitchNode`, `CaseNode` |
 
 Patrón general por nodo: se documenta el tipo declarado del destino/símbolo, se
 resuelven/reportan errores y se registra el símbolo con `ctx.definir`. Para conocer el tipo
 de un hijo se usa `ctx.evaluar(hijo)` (equivale a `hijo.analizar(ctx)`).
 
-**Limitaciones conocidas (seguir en fases posteriores):** los cuerpos de
-funciones/métodos no se analizan (nodos `decl` stub); las llamadas a función/método solo
-verifican que existan, no la firma completa; la compatibilidad de `STRUCT`/`CLASS` que
-llega como resultado de un `AccessNode` compara solo el `Type` (no el nombre), porque
-`Type` es un enum plano.
+**Limitaciones conocidas (seguir en fases posteriores):** las llamadas a
+función/método validan cantidad y tipo pero no el `tipoNombre` de STRUCT/CLASS (la
+comparación usa `Type` plano + `esAsignable`); un acceso a símbolo arreglo como
+argumento se mapea a `ARRAY` (`tiposDeArgumentos`), pero un literal `{...}` solo se
+acepta para `ARRAY` en la rama `FUNCION` (sobrecargas/métodos/constructores no lo
+contemplan); `ReturnNode` fuera de función se trata como "sin retorno esperado"; la
+compatibilidad de `STRUCT`/`CLASS` que llega como resultado de un `AccessNode` compara
+solo el `Type` (no el nombre), porque `Type` es un enum plano.
 
 ---
 
 ## 9. Gramáticas ANTLR — notas de diseño relevantes para planes
 
-### 9.1 PigLatin.g4 (terminada, probada indirectamente)
+### 9.1 PigLatin.g4 (terminada)
 
 - Marcadores `VARIABILES>`/`MAIOR>` son tokens propios (`VARIABILES_MARKER`,
   `MAIOR_MARKER`). `FINIS` (mayúsc.) y `finis` son tokens distintos.
@@ -589,7 +704,7 @@ llega como resultado de un `AccessNode` compara solo el `Type` (no el nombre), p
 - `imprimir : ESCRIBIR (ESCRIBIR? expresion)+ PUNTO_COMA ;` (`>> "a" >> x ;`).
 - Comentarios `//` y `##...##` en canal `HIDDEN`.
 
-### 9.2 YLangLexer.g4 + YLangParser.g4 (terminada y probada)
+### 9.2 YLangLexer.g4 + YLangParser.g4 (terminada)
 
 - **Lexer de solo lexer** (`lexer grammar`) que declara `tokens { INDENT, DEDENT }` y
   sobrescribe `nextToken()` con: pila de indentación (`indentStack`), `opened` (no genera
@@ -601,7 +716,7 @@ llega como resultado de un `AccessNode` compara solo el `Type` (no el nombre), p
 - Operadores relacionales de Y? son SOLO `<` `>` (no hay `MENOR_IGUAL`/`MAYOR_IGUAL`).
 - `imprimir`/`leer` NO son tokens: se parsean como `accesoVariable` con sufijo de llamada.
 
-### 9.3 Zetariano.g4 (terminada y probada, es la gramática real de los alumnos)
+### 9.3 Zetariano.g4 (terminada; es la gramática real de los alumnos)
 
 - `programa : PUBLIC CLASS IDENTIFICADOR '{' miembroClase* '}' EOF` — validar que el
   archivo se llama igual que la clase es responsabilidad de la fase de carga/semántica.
@@ -639,23 +754,27 @@ crea `Lexer`+`CommonTokenStream (DEFAULT_CHANNEL)`+`Parser`, invoca
 
 Posición: `line = ctx.getStart().getLine()`, `column = getCharPositionInLine() + 1`.
 
-### 10.2 `YLangASTBuilder` (ESQUELETO — solo `public ProgramNode construir(String) { return null; }`)
+### 10.2 `YLangASTBuilder` (IMPLEMENTADO)
 
-Debe extender `YLangBaseVisitor<Node>` y traducir `structura` → `StructDeclNode`,
-`funcion` → `FunctionDeclNode` (+ `ParameterNode` con `porReferencia = []=|{}=`), cuerpo de
-función → `BlockNode`, y las sentencias Y? a nodos `stmt`/`expr`. Decisiones obligatorias
-del plan para TODO lo listado en la sección 7.5 aplicable a Y? (return, switch, dims en
-campos/arreglos, etc.). `sourceLanguage = "Y?"`.
+Extiende `YLangParserBaseVisitor<Node>` y traduce `structura` → `StructDeclNode`,
+`funcion` → `FunctionDeclNode` (+ `ParameterNode` con `porReferencia = []|{}` y
+`tipoNombre`), cuerpo de función → `BlockNode`, y las sentencias Y? a nodos
+`stmt`/`expr` (return, switch, dims en campos/arreglos incl. multidim con `tamano` =
+producto, etc.). `sourceLanguage = "Y?"`. Las reglas de igualdad/relacional/aditiva/
+multiplicativa recorren `children` en orden (asociatividad izquierda correcta);
+`!` se pasa crudo a `UnaryOpNode`.
 
-### 10.3 `ZetarianoASTBuilder` (ESQUELETO)
+### 10.3 `ZetarianoASTBuilder` (IMPLEMENTADO)
 
-Debe traducir `programa` (una clase) → `ClassDeclNode` (atributos, constructores, métodos);
-campos → `VariableDeclNode`; métodos/constructores → `MethodDeclNode`/`ConstructorDeclNode`
-con `BlockNode`; sentencias/expresiones → `stmt`/`expr` (incl. decisiones de 7.5 para
-ternario, `null`, `new int[]`, `+=`, `return`, `switch`, dims, cuerpos sin llaves, `%`).
-`sourceLanguage = "Zetariano"`. Para `if` anidado con `else if`: `ramaElse→condicional` se
-colapsa a `ElseIfNode` o se anida un `IfNode` dentro de `ramas` (decisión del plan; la
-estructura `IfNode+List<ElseIfNode>` es la natural).
+Traduce `programa` (una clase) → `ClassDeclNode` (atributos, constructores, métodos);
+campos → `VariableDeclNode` (arreglos con `tipoElemento`+`dimensiones`);
+métodos/constructores → `MethodDeclNode`/`ConstructorDeclNode` con `BlockNode`
+(+ `tipoRetornoNombre`/`tipoRetornoElemento`); sentencias/expresiones → `stmt`/`expr`
+(ternario, `null`, `new int[]`/`new Clase[]`, `+=` con desugar que comparte sufijos,
+`return`, `switch`, dims, cuerpos sin llaves vía `cuerpoOSentencia`, `%`).
+`sourceLanguage = "Zetariano"`. Para `if` anidado con `else if`: `ramaElse→condicional`
+se colapsa a `ElseIfNode` (método `aplanarRamaElse`). Igual que Y?: `children` en orden
+y `!` crudo.
 
 ---
 
@@ -682,7 +801,7 @@ public interface CodigoContexto {
 Campos: `List<Cuarteta> cuartetas`, `ErrorListener`, `Deque<String[]> ciclos`,
 `tempCounter`, `labelCounter`. API: `getCuartetas()`, `getErrorListener()`. Generación
 global NO vinculada a ningún idioma — cada nodo emitirá vía `Node.traducir(ctx)`.
-**PENDIENTE**: implementar `traducir` en los 29 nodos. Pauta general para el plan:
+**PENDIENTE**: implementar `traducir` en los 34 nodos. Pauta general para el plan:
 recorrer el árbol, `emitir(op, op1, op2, res)`; para el flujo usar `nuevaEtiqueta()` y
 `empujarCiclo/etiqueta*Actual` para `romper`/`continuar`.
 
@@ -733,25 +852,29 @@ Campos de reporte: `ventanaErrores` (`{"Tipo","Descripción","Línea","Columna"}
 
 **Flujo de `compilar(log)` (estado ACTUAL):**
 
-1. `log.limpiar()`, `ventanaErrores.limpiar()`.
+1. `log.limpiar()`, `ventanaErrores.limpiar()`, `ventanaSimbolos.limpiar()`.
 2. Editor activo → `VerificadorSintactico.verificar(texto, archivo)`.
 3. Si extensión no válida → error y fin.
 4. Log tokens + "Análisis sintáctico...". Si hay errores sintácticos → filas en
-   `ventanaErrores` y fin.
-5. Sin errores sintácticos: si el archivo es `.pig`, `ejecutarPipelineSemantico`:
-   - `PigLatinASTBuilder.construir(leer(archivoPig))` (si `null` → error).
+   `ventanaErrores` + resumen en log, y fin.
+5. Sin errores sintácticos: si el archivo es `.pig`/`.y`/`.z`,
+   `ejecutarPipelineSemantico(archivo, log, ventanaErrores)`:
+   - `construirAST(archivo)` según extensión (si `null` → error).
+   - Si es `.z`: verifica que el archivo se llame igual que la clase pública
+     (`nombreClasePrincipal`) → fila de error semántico si no.
    - Por cada `ImportNode` en `programa.declarations`: `resolverImport(rutaCompleta)`
-     (`carpetaProyecto/ruta(.y|.z)`; reposa en `carpetaProyecto`, si es `null` falla).
-     Si no existe → error en log. Si el builder devuelve `null` → pendiente en log.
-   - `SemanticAnalyzer.analizar(programas)`.
-   - Errores semánticos → log y (aún NO se llena `ventanaErrores` desde semántica:
-     pendiente menor).
-   - `mostrarSimbolos(analizador.getSymbolTable())` → `ventanaSimbolos`.
-6. Si es `.y`/`.z` → log "pendiente backend".
+     (`carpetaProyecto/ruta(.y|.z)`); si no existe → fila de error semántico con la
+     posición del import; si el builder devuelve `null` → pendiente en log.
+   - `SemanticAnalyzer.analizar(programas)` → errores semánticos a filas de
+     `ventanaErrores`.
+   - Si hay filas de error → resumen en log y fin (no se muestran símbolos).
+   - Si no: "Análisis semántico completado." + `mostrarSimbolos(...)` → `ventanaSimbolos`
+     (`Tipo` muestra `"vacio"` si es `null` como `leer`; `Valor` siempre `"-"`;
+     `Línea` desde `Symbol.getLinea()` o `"-"`).
+6. Otra extensión → log "pendiente backend".
 
 - [ ] **PENDIENTE (conectar)**: cuartetas a `ventanaCuartetas`, C3D a `ventanaC3D`,
-      código C (menú "Ver código C" hoy muestra un placeholder), y reportar errores
-      semánticos también en `ventanaErrores`.
+      código C (menú "Ver código C" hoy muestra un placeholder).
 - [ ] **PENDIENTE (robustez)**: los builders de los imports se invocan sin verificación
       sintáctica previa. Los planes deben incluir attaching de `ErrorListener` o
       verificación previa para que un `.y`/`.z` mal parseado no rompa el runtime.
@@ -797,6 +920,21 @@ Casos manuales que ya deben funcionar (fase semántica Pig Latin): variable no d
 asignación de tipo incompatible, condición no booleana, `interrumpe`/`perge` fuera de
 ciclo, y literal de estructura con número/tipo de campos incorrectos.
 
+Carpeta `Ejemplos/` (en la raíz): `ejemplo.pig`, `ejemplo.y`, `Persona.z` (el `.z` se
+llama igual que su clase, regla del spec, verificada por la GUI). Cubren casi todo cada
+gramática y están verificados: 0 errores sintácticos en los 3 y 0 errores semánticos en
+los 3 (pipeline completo en cada lenguaje). Abrir esa carpeta como proyecto en la GUI
+sirve como prueba manual de regresión. Notas: `BinaryOpNode` acepta `<=`/`>=`/`%` (las
+gramáticas los producen); `UnaryOpNode` acepta `"non"` (Pig Latin) y `"!"` (Y?/Z).
+
+Casos manuales que también deben seguir pasando (errores esperados): estructura con campo de tipo desconocido,
+campo duplicado, función duplicada, llamada con cantidad/tipo de argumentos incorrectos,
+parámetro por referencia de tipo primitivo, `retornar valor` en función sin retorno,
+`romper` fuera de ciclo/`elegir`, clase con atributo duplicado, `new Clase` sin
+constructor compatible, método sobrecargado con argumentos que no calzan, atributo
+resuelto sin `this.` dentro de un método, `if(obj == null)`, ternario con condición no
+booleana o ramas incompatibles, `new int[x]` con tamaño no entero.
+
 ---
 
 ## 15. Estado por componente (matriz)
@@ -805,20 +943,21 @@ ciclo, y literal de estructura con número/tipo de campos incorrectos.
 |---|---|
 | Corrección de arquitectura (AST/semántica unificados) | Aplicada y compilando |
 | Gramática Pig Latin | Terminada |
-| Gramática Y? (INDENT/DEDENT) | Terminada y probada (10) |
-| Gramática Zetariano (real) | Terminada y probada (10) |
-| AST unificado (29 clases) + `decl/` | Terminado |
+| Gramática Y? (INDENT/DEDENT) | Terminada |
+| Gramática Zetariano (real) | Terminada |
+| AST unificado (34 clases: +`Return`/`Switch`/`Case`/`Conditional`/`NewArray`) | Terminado |
 | `PigLatinASTBuilder` | Terminado (emite `ast.*`) |
-| `YLangASTBuilder` / `ZetarianoASTBuilder` | Esqueletos (`construir` → null) |
-| Pase A (firmas + miembros en `Symbol`) + Pase B | Operativos; Pase B analiza los 23 nodos de Pig Latin |
-| `Node.analizar` | Implementado en 23 nodos (fase Pig Latin); `decl` sigue stub |
-| `TypeCompat` / `Symbol.tipoNombre,miembros` / `Scope` ordenado | Terminados |
-| `Node.traducir` (29 nodos) | Stub (`return null`) |
+| `YLangASTBuilder` / `ZetarianoASTBuilder` | Terminados (emiten `ast.*`; `sourceLanguage` = `Y?`/`Zetariano`; `children` en orden; `!` crudo) |
+| Pase A (`registrarEstructura`/`registrarFuncion`/`registrarClase`/`registrarNativas`) + Pase B | Operativos; Pase B analiza los 34 nodos |
+| `Node.analizar` | Implementado en 34/34 nodos (fases Pig Latin + Y? + Zetariano) |
+| `TypeCompat` (+ reglas `NULL`) / `Symbol` (firmas, nativas, dims, `variable()`) / `Scope` (`resolveLocal`, orden) / `SymbolTable.registro` | Terminados |
+| `Node.traducir` (34 nodos) | Stub (`return null`) |
 | `C3DGenerator.generate` | Vacío |
 | `CCodeGenerator.generate` | Solo cabeceras |
-| Resolución de imports + tabla de símbolos en la UI | Operativa (`.pig`) |
+| Resolución de imports + tabla de símbolos en la UI | Operativa (`.pig`/`.y`/`.z`; la tabla incluye locales, params y nativas) |
+| Reporte de errores en la UI | Conectado (sintácticos + semánticos + archivo==clase en `ventanaErrores`) |
 | Reportes de cuartetas/C3D/código C en la UI | No conectados |
-| Pipeline UI | Parcial: `.pig` → sintaxis + imports + 2 pases + símbolos |
+| Pipeline UI | Completo para compilación: `.pig`/`.y`/`.z` → sintaxis + imports + 2 pases + símbolos (backend pendiente) |
 
 ---
 
@@ -826,34 +965,28 @@ ciclo, y literal de estructura con número/tipo de campos incorrectos.
 
 Orden recomendado de fases (cada una debe terminar compilando y verificada desde la GUI):
 
-1. **P1 — Alineamiento de tipos y dims del AST** (sin lógica nueva):
-   - Alinear `Type.fromYLang` (`flotante/cadena/bool`).
-   - Decidir y agregar soporte de dimensiones de arreglo (gap 7–8) y ajustar
-     `ArrayDeclNode`/campos/parámetros. *Depende de nada; desbloquea builders.*
-2. **P2 — Nodos faltantes por decisión** (gap 1–6): `ReturnNode`, `SwitchNode` (o desugar),
-   `ConditionalNode`, `Clase.NULO`, arr‑new, desugar de `+=`; registrar en `ASTVisitor`.
-   *Depende de P1 (dims si switch/arr‑new los necesitan).*
-3. **P3 — `YLangASTBuilder`** completo (vitando P1/P2) + caso manual en la GUI.
-4. **P4 — `ZetarianoASTBuilder`** completo + caso manual en la GUI.
-5. **P5 — Semántica (HECHA en Pig Latin; falta extenderla)**:
-   - Hecho (spec `Semantico_PigLatin_v2.md`): `TypeCompat`, `Symbol` (`tipoNombre`/
-     `miembros`), `Scope` ordenado, `paseA` con miembros en el `Symbol`, y `analizar()` en
-     23 nodos; verificada desde la GUI.
-   - Pendiente: `analizar()` en los nodos `decl` (cuerpos de funciones/métodos), firmas por
-     tipos (`Symbol.tiposParametros`), built-ins de Y? y el alcance de Y?/Zetariano.
-     *Depende de P3/P4 para tener árboles reales de esos lenguajes.*
-6. **P6 — Conectar UI**: verificación sintáctica previa para imports (robustez), llenar
-   `ventanaErrores` desde semántica, y (con P7) cuartetas/C3D/C.
+1. **P1 — Alineamiento de tipos y dims del AST: HECHO** — `fromYLang` alineado;
+   modelo `tipoElemento`+`dimensiones` (`VariableDeclNode`/`ArrayDeclNode`/`ParameterNode`/
+   `Symbol`); `%` y `<=`/`>=` en `BinaryOpNode`; `"!"` en `UnaryOpNode`; desugar de `+=`.
+2. **P2 — Nodos faltantes: HECHO** — `ReturnNode`, `SwitchNode`/`CaseNode`,
+   `ConditionalNode`, `Clase.NULO`+`Type.NULL`, `NewArrayNode`, todos con `analizar` y
+   registrados en `ASTVisitor`.
+3. **P3 — `YLangASTBuilder`: HECHO** (+ `children` en orden, `!` crudo, multidim).
+4. **P4 — `ZetarianoASTBuilder`: HECHO** (+ ternario, `null`, `new` arreglos, desugar,
+   `cuerpoOSentencia`, `aplanarRamaElse`).
+5. **P5 — Semántica: HECHA en los 3 lenguajes** (specs + nativas + arreglos-como-valor):
+   `analizar()` en 34/34 nodos; verificada con `Ejemplos/` (0 errores en los 3) y sondas
+   de árboles/negativos. Menores restantes en §8.7.
+6. **P6 — Conectar UI: HECHO** (pipeline en 3 lenguajes, errores a `ventanaErrores`,
+   chequeo archivo==clase). Resta robustez: verificación sintáctica previa de imports.
 7. **P7 — Cuartetas**: implementar `traducir` en los nodos + `IntermediateCodeGenerator` +
-   reporte `ventanaCuartetas`. *Depende de P5 (semántica) y de P2 (nodos).*
+   reporte `ventanaCuartetas`. *Depende de P5.*
 8. **P8 — C3D**: `C3DGenerator.generate` + reporte `ventanaC3D`.
 9. **P9 — Código C**: `CCodeGenerator` + menú Ver código C + (decisión) guardar `.c`.
    *Depende de P8.*
 
-Otros pendientes registrados: validar nombre de archivo == clase (Zetariano), Pase A
-recursivo a imports‑de‑imports, múltiples constructores con el mismo nombre (hoy
-`getTodos()` conserva los duplicados, pero `resolve(nombre)` solo ve el último), y decidir
-el C destino de structs/clases.
+Otros pendientes registrados: Pase A recursivo a imports‑de‑imports, y decidir el C
+destino de structs/clases.
 
 ---
 

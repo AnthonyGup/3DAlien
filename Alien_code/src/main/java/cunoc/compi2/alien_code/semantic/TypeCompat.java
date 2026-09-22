@@ -15,7 +15,9 @@ public final class TypeCompat {
     public static boolean esAsignable(Type destino, Type origen) {
         if (destino == null || origen == null) return true;
         if (destino == origen) return true;
-        return destino == Type.FLOAT && origen == Type.INT;
+        if (destino == Type.FLOAT && origen == Type.INT) return true;
+        if ((destino == Type.STRUCT || destino == Type.CLASS) && origen == Type.NULL) return true;
+        return false;
     }
 
     // igual que arriba pero tambien revisa que el nombre coincida para structs/objetos
@@ -42,6 +44,8 @@ public final class TypeCompat {
     public static boolean sonComparables(Type izq, Type der) {
         if (izq == null || der == null) return true;
         if (izq == der) return true;
+        if (izq == Type.NULL && (der == Type.STRUCT || der == Type.CLASS)) return true;
+        if (der == Type.NULL && (izq == Type.STRUCT || izq == Type.CLASS)) return true;
         return esNumerico(izq) && esNumerico(der);
     }
 

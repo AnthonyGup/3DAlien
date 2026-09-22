@@ -21,4 +21,26 @@ public interface ContextoSemantico {
     void salirCiclo();
 
     boolean enCiclo();
+
+    Scope ambitoActual();
+
+    void pushTipoRetorno(Type tipo);
+
+    void popTipoRetorno();
+
+    Type tipoRetornoActual();
+
+    void entrarSwitch();
+
+    void salirSwitch();
+
+    boolean enSwitch();
+
+    void entrarAmbitoDentroDe(Scope padre);
+
+    void pushClaseActual(Scope miembros);
+
+    void popClaseActual();
+
+    Scope ambitoDeClaseActual();
 }

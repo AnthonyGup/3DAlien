@@ -1,30 +1,31 @@
-package cunoc.compi2.alien_code.ast.decl;
+package cunoc.compi2.alien_code.ast.stmt;
 
 import cunoc.compi2.alien_code.ast.ASTVisitor;
 import cunoc.compi2.alien_code.ast.Node;
 import cunoc.compi2.alien_code.ast.Type;
-import cunoc.compi2.alien_code.ast.stmt.BlockNode;
 import cunoc.compi2.alien_code.ir.CodigoContexto;
 import cunoc.compi2.alien_code.semantic.ContextoSemantico;
 
 import java.util.List;
 
-public class ConstructorDeclNode implements Node {
-    public List<ParameterNode> parametros;
-    public BlockNode cuerpo;
+public class CaseNode implements Node {
+    public Node valor;
+    public List<Node> sentencias;
     private final int line;
     private final int column;
 
-    public ConstructorDeclNode(List<ParameterNode> parametros, BlockNode cuerpo, int line, int column) {
-        this.parametros = parametros;
-        this.cuerpo = cuerpo;
+    public CaseNode(Node valor, List<Node> sentencias, int line, int column) {
+        this.valor = valor;
+        this.sentencias = sentencias;
         this.line = line;
         this.column = column;
     }
 
+    public boolean esSiempre() { return valor == null; }
+
     @Override
     public <T> T accept(ASTVisitor<T> visitor) {
-        return visitor.visitConstructorDecl(this);
+        return visitor.visitCase(this);
     }
 
     @Override
@@ -40,14 +41,12 @@ public class ConstructorDeclNode implements Node {
 
     @Override
     public Type analizar(ContextoSemantico ctx) {
-        ctx.entrarAmbitoDentroDe(ctx.ambitoDeClaseActual());
-        for (ParameterNode p : parametros) ctx.evaluar(p);
-
-        ctx.pushTipoRetorno(null);
-        ctx.evaluar(cuerpo);
-        ctx.popTipoRetorno();
-
-        ctx.salirAmbito();
+        if (!esSiempre()) {
+            ctx.evaluar(valor);
+        }
+        for (Node sentencia : sentencias) {
+            ctx.evaluar(sentencia);
+        }
         return Type.VOID;
     }
 }

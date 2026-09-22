@@ -10,16 +10,16 @@ public enum Type {
     VOID,
     STRUCT,
     CLASS,
-    ARRAY;
+    ARRAY,
+    NULL;
 
     public static Type fromYLang(String name) {
         return switch (name.toLowerCase()) {
             case "entero" -> INT;
-            case "decimal" -> FLOAT;
-            case "texto" -> STRING;
-            case "booleano" -> BOOL;
+            case "flotante" -> FLOAT;
+            case "cadena" -> STRING;
+            case "bool" -> BOOL;
             case "caracter" -> CHAR;
-            case "vacio" -> VOID;
             default -> null;
         };
     }
