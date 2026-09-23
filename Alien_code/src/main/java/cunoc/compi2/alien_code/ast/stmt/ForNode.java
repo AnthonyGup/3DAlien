@@ -5,6 +5,8 @@ import cunoc.compi2.alien_code.ir.CodigoContexto;
 import cunoc.compi2.alien_code.ast.ASTVisitor;
 
 import cunoc.compi2.alien_code.ast.Node;
+import cunoc.compi2.alien_code.ir.CodigoContexto;
+import cunoc.compi2.alien_code.ir.IntermediateCodeGenerator;
 
 public class ForNode implements Node {
     public Node inicial;
@@ -37,6 +39,25 @@ public class ForNode implements Node {
 
     @Override
     public String traducir(CodigoContexto ctx) {
+        IntermediateCodeGenerator gen = (IntermediateCodeGenerator) ctx;
+        gen.entrarAmbitoTraduccion();
+        if (inicial != null) inicial.traducir(ctx);
+        String start = ctx.nuevaEtiqueta();
+        String cont = ctx.nuevaEtiqueta();
+        String end = ctx.nuevaEtiqueta();
+        ctx.emitir("label", null, null, start);
+        if (condicion != null) {
+            String cond = condicion.traducir(ctx);
+            ctx.emitir("if_false", cond, null, end);
+        }
+        ctx.empujarCiclo(cont, end);
+        cuerpo.traducir(ctx);
+        ctx.popCiclo();
+        ctx.emitir("label", null, null, cont);
+        if (paso != null) paso.traducir(ctx);
+        ctx.emitir("goto", null, null, start);
+        ctx.emitir("label", null, null, end);
+        gen.salirAmbitoTraduccion();
         return null;
     }
     @Override

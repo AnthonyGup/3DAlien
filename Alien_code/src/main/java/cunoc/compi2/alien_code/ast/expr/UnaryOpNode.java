@@ -5,6 +5,8 @@ import cunoc.compi2.alien_code.ir.CodigoContexto;
 import cunoc.compi2.alien_code.ast.ASTVisitor;
 
 import cunoc.compi2.alien_code.ast.Node;
+import cunoc.compi2.alien_code.ir.CodigoContexto;
+import cunoc.compi2.alien_code.ir.IntermediateCodeGenerator;
 import cunoc.compi2.alien_code.semantic.TypeCompat;
 
 public class UnaryOpNode implements Node {
@@ -34,7 +36,18 @@ public class UnaryOpNode implements Node {
 
     @Override
     public String traducir(CodigoContexto ctx) {
-        return null;
+        String opd = operando.traducir(ctx);
+        String t = ctx.nuevoTemporal();
+        IntermediateCodeGenerator gen = (IntermediateCodeGenerator) ctx;
+        Type tipo = operador.equals("-") ? tipoOperando(opd, gen) : Type.BOOL;
+        gen.recordTemporalType(t, tipo);
+        ctx.emitir(operador.equals("non") ? "!" : operador, opd, null, t);
+        return t;
+    }
+
+    private Type tipoOperando(String opd, IntermediateCodeGenerator gen) {
+        IntermediateCodeGenerator.ValueInfo info = gen.describeValue(opd);
+        return info != null ? info.type : null;
     }
     @Override
     public Type analizar(ContextoSemantico ctx) {

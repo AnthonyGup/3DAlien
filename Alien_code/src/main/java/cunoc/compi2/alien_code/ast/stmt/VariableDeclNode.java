@@ -8,6 +8,8 @@ import cunoc.compi2.alien_code.ast.Type;
 import cunoc.compi2.alien_code.ast.expr.AccessNode;
 import cunoc.compi2.alien_code.ast.expr.NewArrayNode;
 import cunoc.compi2.alien_code.ast.expr.StructLiteralNode;
+import cunoc.compi2.alien_code.ir.CodigoContexto;
+import cunoc.compi2.alien_code.ir.IntermediateCodeGenerator;
 import cunoc.compi2.alien_code.semantic.Symbol;
 import cunoc.compi2.alien_code.semantic.TypeCompat;
 
@@ -44,6 +46,16 @@ public class VariableDeclNode implements Node {
 
     @Override
     public String traducir(CodigoContexto ctx) {
+        IntermediateCodeGenerator gen = (IntermediateCodeGenerator) ctx;
+        if (gen.enAmbitoTraduccion()) {
+            gen.definirEnTraduccion(Symbol.variable(nombre, tipo, tipoElemento, tipoNombre,
+                    dimensiones, false, false, getLine(), getColumn()));
+        }
+        if (inicial == null) {
+            return null;
+        }
+        String value = inicial.traducir(ctx);
+        ctx.emitir("=", value, null, nombre);
         return null;
     }
     @Override

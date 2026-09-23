@@ -1,7 +1,8 @@
 package cunoc.compi2.alien_code.ast.expr;
 import cunoc.compi2.alien_code.ast.Type;
-import cunoc.compi2.alien_code.semantic.ContextoSemantico;
 import cunoc.compi2.alien_code.ir.CodigoContexto;
+import cunoc.compi2.alien_code.ir.IntermediateCodeGenerator;
+import cunoc.compi2.alien_code.semantic.ContextoSemantico;
 import cunoc.compi2.alien_code.ast.ASTVisitor;
 
 import cunoc.compi2.alien_code.ast.Node;
@@ -35,7 +36,20 @@ public class LiteralNode implements Node {
 
     @Override
     public String traducir(CodigoContexto ctx) {
-        return null;
+        ((IntermediateCodeGenerator) ctx).recordTemporalType(valor, tipoDeClase());
+        return valor;
+    }
+
+    private Type tipoDeClase() {
+        switch (clase) {
+            case ENTERO: return Type.INT;
+            case DECIMAL: return Type.FLOAT;
+            case CADENA: return Type.STRING;
+            case CARACTER: return Type.CHAR;
+            case BOOLEANO: return Type.BOOL;
+            case NULO: return Type.NULL;
+            default: return null;
+        }
     }
     @Override
     public Type analizar(ContextoSemantico ctx) {

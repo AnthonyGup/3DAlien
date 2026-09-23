@@ -33,6 +33,12 @@ public class PrintNode implements Node {
 
     @Override
     public String traducir(CodigoContexto ctx) {
+        StringBuilder args = new StringBuilder();
+        for (int i = 0; i < expresiones.size(); i++) {
+            if (i > 0) args.append(", ");
+            args.append(expresiones.get(i).traducir(ctx));
+        }
+        ctx.emitir("print", args.toString(), null, null);
         return null;
     }
     @Override

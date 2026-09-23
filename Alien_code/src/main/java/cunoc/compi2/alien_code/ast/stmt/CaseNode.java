@@ -36,6 +36,15 @@ public class CaseNode implements Node {
 
     @Override
     public String traducir(CodigoContexto ctx) {
+        if (!esSiempre()) {
+            String valorText = valor.traducir(ctx);
+            ctx.emitir("case", valorText, null, null);
+        } else {
+            ctx.emitir("case", "default", null, null);
+        }
+        for (Node sentencia : sentencias) {
+            sentencia.traducir(ctx);
+        }
         return null;
     }
 

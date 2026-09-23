@@ -5,6 +5,8 @@ import cunoc.compi2.alien_code.ast.ASTVisitor;
 
 import cunoc.compi2.alien_code.ast.Node;
 import cunoc.compi2.alien_code.ast.Type;
+import cunoc.compi2.alien_code.ir.CodigoContexto;
+import cunoc.compi2.alien_code.ir.IntermediateCodeGenerator;
 import cunoc.compi2.alien_code.semantic.Symbol;
 import cunoc.compi2.alien_code.semantic.TypeCompat;
 
@@ -44,6 +46,24 @@ public class ArrayDeclNode implements Node {
 
     @Override
     public String traducir(CodigoContexto ctx) {
+        IntermediateCodeGenerator gen = (IntermediateCodeGenerator) ctx;
+        if (gen.enAmbitoTraduccion()) {
+            Symbol simbolo = new Symbol(nombre, tipo, Symbol.Kind.VARIABLE, true, false, false, tamano);
+            simbolo.setDimensiones(dimensiones);
+            simbolo.setLinea(getLine());
+            simbolo.setColumna(getColumn());
+            if (tipo == Type.STRUCT || tipo == Type.CLASS) {
+                simbolo.setTipoNombre(tipoNombre);
+            }
+            gen.definirEnTraduccion(simbolo);
+        }
+        ctx.emitir("array", nombre, String.valueOf(tamano), null);
+        if (iniciales != null) {
+            for (int i = 0; i < iniciales.size(); i++) {
+                String val = iniciales.get(i).traducir(ctx);
+                ctx.emitir("[]=", String.valueOf(i), val, nombre);
+            }
+        }
         return null;
     }
     @Override

@@ -33,6 +33,8 @@ public class IncrementNode implements Node {
 
     @Override
     public String traducir(CodigoContexto ctx) {
+        String lvalue = objetivo.toLvalue(ctx);
+        ctx.emitir("+", lvalue, "1", lvalue);
         return null;
     }
     @Override

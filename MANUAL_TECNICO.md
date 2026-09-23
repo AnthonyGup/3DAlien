@@ -799,11 +799,17 @@ public interface CodigoContexto {
 ### 11.2 `ir.IntermediateCodeGenerator` (implementa `CodigoContexto`)
 
 Campos: `List<Cuarteta> cuartetas`, `ErrorListener`, `Deque<String[]> ciclos`,
-`tempCounter`, `labelCounter`. API: `getCuartetas()`, `getErrorListener()`. Generación
-global NO vinculada a ningún idioma — cada nodo emitirá vía `Node.traducir(ctx)`.
-**PENDIENTE**: implementar `traducir` en los 34 nodos. Pauta general para el plan:
-recorrer el árbol, `emitir(op, op1, op2, res)`; para el flujo usar `nuevaEtiqueta()` y
-`empujarCiclo/etiqueta*Actual` para `romper`/`continuar`.
+`tempCounter`, `labelCounter`. API: `getCuartetas()`, `getErrorListener()`, aditivo
+`setSymbolTable(SymbolTable)` (captura `ambitoActual()` como ámbito global), registros de
+metadatos de temporales (`recordTemporalType`/`recordTemporal`/`describeValue` →
+`ValueInfo{type,isArray,dimensiones,tipoNombre}`), espejo de scopes para resolución local
+(`entrarAmbitoTraduccion()`/`entrarAmbitoTraduccion(Scope)`/`salirAmbitoTraduccion`/
+`definirEnTraduccion`/`resolveForTranslation`), pila de clases (`push/popClassTranslation`,
+`currentClassName`/`currentClassMembers`, `nextMethodIndex`/`nextConstructorIndex`) y
+`overloadIndexByArgCount` (sobrecarga por cantidad de argumentos). **HECHO (P7)**: los 34
+nodos implementan `traducir(ctx)`; vocabulario: `label`, `goto`, `if_false`, `if_true`,
+`=`, `+ - * / %`, `== != < > <= >=`, `!`, `.`, `[]`, `[]=`, `call`, `print`, `read`,
+`return`, `newarray`, `array`, `func`/`func_end`, `struct`, `case` y `halt`.
 
 ### 11.3 `ir.Cuarteta`
 
@@ -868,13 +874,19 @@ Campos de reporte: `ventanaErrores` (`{"Tipo","Descripción","Línea","Columna"}
    - `SemanticAnalyzer.analizar(programas)` → errores semánticos a filas de
      `ventanaErrores`.
    - Si hay filas de error → resumen en log y fin (no se muestran símbolos).
-   - Si no: "Análisis semántico completado." + `mostrarSimbolos(...)` → `ventanaSimbolos`
-     (`Tipo` muestra `"vacio"` si es `null` como `leer`; `Valor` siempre `"-"`;
-     `Línea` desde `Symbol.getLinea()` o `"-"`).
+- Si no: "Análisis semántico completado." + `mostrarSimbolos(...)` → `ventanaSimbolos`
+      (`Tipo` muestra `"vacio"` si es `null` como `leer`; `Valor` siempre `"-"`;
+      `Línea` desde `Symbol.getLinea()` o `"-"`).
+   - P7: `ventanaCuartetas.limpiar()`, `new IntermediateCodeGenerator(errores)`,
+      `generador.setSymbolTable(analizador.getSymbolTable())`, `p.traducir(generador)` por
+      cada programa (incluidos los importados), y cada cuarteta → fila
+      `{#incremental, operador, operando1, operando2, resultado}` con resumen
+      "Cuartetas generadas: N".
 6. Otra extensión → log "pendiente backend".
 
-- [ ] **PENDIENTE (conectar)**: cuartetas a `ventanaCuartetas`, C3D a `ventanaC3D`,
-      código C (menú "Ver código C" hoy muestra un placeholder).
+- [x] **HECHO (P7)**: cuartetas a `ventanaCuartetas`.
+- [ ] **PENDIENTE (conectar)**: C3D a `ventanaC3D`, código C (menú "Ver código C" hoy
+      muestra un placeholder).
 - [ ] **PENDIENTE (robustez)**: los builders de los imports se invocan sin verificación
       sintáctica previa. Los planes deben incluir attaching de `ErrorListener` o
       verificación previa para que un `.y`/`.z` mal parseado no rompa el runtime.
@@ -951,13 +963,14 @@ booleana o ramas incompatibles, `new int[x]` con tamaño no entero.
 | Pase A (`registrarEstructura`/`registrarFuncion`/`registrarClase`/`registrarNativas`) + Pase B | Operativos; Pase B analiza los 34 nodos |
 | `Node.analizar` | Implementado en 34/34 nodos (fases Pig Latin + Y? + Zetariano) |
 | `TypeCompat` (+ reglas `NULL`) / `Symbol` (firmas, nativas, dims, `variable()`) / `Scope` (`resolveLocal`, orden) / `SymbolTable.registro` | Terminados |
-| `Node.traducir` (34 nodos) | Stub (`return null`) |
-| `C3DGenerator.generate` | Vacío |
-| `CCodeGenerator.generate` | Solo cabeceras |
+| `Node.traducir` (34 nodos) | Implementado en 34/34 (fase P7; IR `CodigoContexto` + `IntermediateCodeGenerator`) |
+| `C3DGenerator.generate` | Vacío (P8) |
+| `CCodeGenerator.generate` | Solo cabeceras (P9) |
 | Resolución de imports + tabla de símbolos en la UI | Operativa (`.pig`/`.y`/`.z`; la tabla incluye locales, params y nativas) |
 | Reporte de errores en la UI | Conectado (sintácticos + semánticos + archivo==clase en `ventanaErrores`) |
-| Reportes de cuartetas/C3D/código C en la UI | No conectados |
-| Pipeline UI | Completo para compilación: `.pig`/`.y`/`.z` → sintaxis + imports + 2 pases + símbolos (backend pendiente) |
+| Reporte de cuartetas en la UI | Conectado (llenado tras el análisis semántico en `ventanaCuartetas`) |
+| Reportes de C3D/código C en la UI | No conectados (P8/P9) |
+| Pipeline UI | Completo para compilación: `.pig`/`.y`/`.z` → sintaxis + imports + 2 pases + símbolos + cuartetas (C3D/C pendientes) |
 
 ---
 
@@ -979,8 +992,12 @@ Orden recomendado de fases (cada una debe terminar compilando y verificada desde
    de árboles/negativos. Menores restantes en §8.7.
 6. **P6 — Conectar UI: HECHO** (pipeline en 3 lenguajes, errores a `ventanaErrores`,
    chequeo archivo==clase). Resta robustez: verificación sintáctica previa de imports.
-7. **P7 — Cuartetas**: implementar `traducir` en los nodos + `IntermediateCodeGenerator` +
-   reporte `ventanaCuartetas`. *Depende de P5.*
+7. **P7 — Cuartetas: HECHO** — `traducir` en 34/34 nodos + `IntermediateCodeGenerator`
+   (tabla vía `setSymbolTable`, espejo de scopes para resolución local, sobrecarga por
+   conteo de argumentos, decoración `Clase_método_idx`/`Clase_init_idx`, marcadores
+   `func`/`func_end`/`struct`/`array`, `halt` solo Pig Latin) + reporte `ventanaCuartetas`.
+   Verificado: `mvn -B clean compile` + traducción de `Ejemplos/{ejemplo.pig,ejemplo.y,Persona.z}`
+   (0 errores semánticos, cuartetas revisadas a mano). *Dependió de P5.*
 8. **P8 — C3D**: `C3DGenerator.generate` + reporte `ventanaC3D`.
 9. **P9 — Código C**: `CCodeGenerator` + menú Ver código C + (decisión) guardar `.c`.
    *Depende de P8.*

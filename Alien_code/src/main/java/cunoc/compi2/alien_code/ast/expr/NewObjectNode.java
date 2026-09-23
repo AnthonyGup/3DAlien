@@ -5,6 +5,9 @@ import cunoc.compi2.alien_code.ir.CodigoContexto;
 import cunoc.compi2.alien_code.ast.ASTVisitor;
 
 import cunoc.compi2.alien_code.ast.Node;
+import cunoc.compi2.alien_code.ir.CodigoContexto;
+import cunoc.compi2.alien_code.ir.IntermediateCodeGenerator;
+import cunoc.compi2.alien_code.semantic.ContextoSemantico;
 import cunoc.compi2.alien_code.semantic.Symbol;
 
 import java.util.List;
@@ -36,7 +39,29 @@ public class NewObjectNode implements Node {
 
     @Override
     public String traducir(CodigoContexto ctx) {
-        return null;
+        IntermediateCodeGenerator gen = (IntermediateCodeGenerator) ctx;
+        String t = ctx.nuevoTemporal();
+        gen.recordTemporal(t, Type.CLASS, false, 0, nombreClase);
+        ctx.emitir("call", "malloc", "sizeof(struct " + nombreClase + ")", t);
+
+        StringBuilder args = new StringBuilder(t);
+        for (Node a : argumentos) {
+            args.append(", ").append(a.traducir(ctx));
+        }
+
+        int overloadIndex = resolveConstructorOverloadIndex(gen);
+        String discard = ctx.nuevoTemporal();
+        gen.recordTemporalType(discard, Type.VOID);
+        ctx.emitir("call", nombreClase + "_init_" + overloadIndex, args.toString(), discard);
+        return t;
+    }
+
+    private int resolveConstructorOverloadIndex(IntermediateCodeGenerator gen) {
+        Symbol clase = gen.resolveForTranslation(nombreClase);
+        if (clase == null) {
+            return 0;
+        }
+        return gen.overloadIndexByArgCount(clase.getFirmasConstructores(), argumentos.size());
     }
     @Override
     public Type analizar(ContextoSemantico ctx) {

@@ -36,6 +36,7 @@ public class StructDeclNode implements Node {
 
     @Override
     public String traducir(CodigoContexto ctx) {
+        ctx.emitir("struct", nombre, String.valueOf(campos.size()), null);
         return null;
     }
 

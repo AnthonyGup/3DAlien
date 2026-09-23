@@ -5,6 +5,8 @@ import cunoc.compi2.alien_code.ir.CodigoContexto;
 import cunoc.compi2.alien_code.ast.ASTVisitor;
 
 import cunoc.compi2.alien_code.ast.Node;
+import cunoc.compi2.alien_code.ir.CodigoContexto;
+import cunoc.compi2.alien_code.ir.IntermediateCodeGenerator;
 
 import java.util.List;
 
@@ -34,9 +36,45 @@ public class IfNode implements Node {
     @Override
     public int getColumn() { return column; }
 
-
     @Override
     public String traducir(CodigoContexto ctx) {
+        IntermediateCodeGenerator gen = (IntermediateCodeGenerator) ctx;
+        String cond = condicion.traducir(ctx);
+        String end = ctx.nuevaEtiqueta();
+        String elseLabel = ramas.isEmpty() ? end : ctx.nuevaEtiqueta();
+        ctx.emitir("if_false", cond, null, elseLabel);
+
+        gen.entrarAmbitoTraduccion();
+        if (cuerpo != null) {
+            cuerpo.traducir(ctx);
+        }
+        gen.salirAmbitoTraduccion();
+
+        if (ramas.isEmpty()) {
+            ctx.emitir("label", null, null, end);
+            return null;
+        }
+
+        ctx.emitir("goto", null, null, end);
+        ctx.emitir("label", null, null, elseLabel);
+        for (int i = 0; i < ramas.size(); i++) {
+            ElseIfNode rama = ramas.get(i);
+            if (i == ramas.size() - 1 && rama.esElse()) {
+                gen.entrarAmbitoTraduccion();
+                rama.cuerpo.traducir(ctx);
+                gen.salirAmbitoTraduccion();
+            } else {
+                String next = ctx.nuevaEtiqueta();
+                String condRama = rama.condicion.traducir(ctx);
+                ctx.emitir("if_false", condRama, null, next);
+                gen.entrarAmbitoTraduccion();
+                rama.cuerpo.traducir(ctx);
+                gen.salirAmbitoTraduccion();
+                ctx.emitir("goto", null, null, end);
+                ctx.emitir("label", null, null, next);
+            }
+        }
+        ctx.emitir("label", null, null, end);
         return null;
     }
     @Override

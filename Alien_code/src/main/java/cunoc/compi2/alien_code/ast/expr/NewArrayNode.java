@@ -4,6 +4,7 @@ import cunoc.compi2.alien_code.ast.ASTVisitor;
 import cunoc.compi2.alien_code.ast.Node;
 import cunoc.compi2.alien_code.ast.Type;
 import cunoc.compi2.alien_code.ir.CodigoContexto;
+import cunoc.compi2.alien_code.ir.IntermediateCodeGenerator;
 import cunoc.compi2.alien_code.semantic.ContextoSemantico;
 
 import java.util.List;
@@ -40,7 +41,16 @@ public class NewArrayNode implements Node {
 
     @Override
     public String traducir(CodigoContexto ctx) {
-        return null;
+        StringBuilder dims = new StringBuilder();
+        for (int i = 0; i < dimensiones.size(); i++) {
+            if (i > 0) dims.append(", ");
+            dims.append(dimensiones.get(i).traducir(ctx));
+        }
+        String t = ctx.nuevoTemporal();
+        ((IntermediateCodeGenerator) ctx)
+                .recordTemporal(t, tipoElemento, true, dimensiones.size(), tipoNombreElemento);
+        ctx.emitir("newarray", dims.toString(), null, t);
+        return t;
     }
 
     @Override

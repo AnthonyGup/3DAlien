@@ -29,6 +29,7 @@ public class ContinueNode implements Node {
 
     @Override
     public String traducir(CodigoContexto ctx) {
+        ctx.emitir("goto", null, null, ctx.etiquetaContinuarActual());
         return null;
     }
     @Override

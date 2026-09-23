@@ -5,6 +5,8 @@ import cunoc.compi2.alien_code.ir.CodigoContexto;
 import cunoc.compi2.alien_code.ast.ASTVisitor;
 
 import cunoc.compi2.alien_code.ast.Node;
+import cunoc.compi2.alien_code.ir.CodigoContexto;
+import cunoc.compi2.alien_code.ir.IntermediateCodeGenerator;
 import cunoc.compi2.alien_code.semantic.TypeCompat;
 
 public class BinaryOpNode implements Node {
@@ -36,7 +38,49 @@ public class BinaryOpNode implements Node {
 
     @Override
     public String traducir(CodigoContexto ctx) {
-        return null;
+        if (operador.equals("&&") || operador.equals("||")) {
+            return traducirCortocircuito(ctx);
+        }
+        String izq = izquierda.traducir(ctx);
+        String der = derecha.traducir(ctx);
+        String t = ctx.nuevoTemporal();
+        ((IntermediateCodeGenerator) ctx).recordTemporalType(t, tipoResultado(izq, der, ctx));
+        ctx.emitir(operador, izq, der, t);
+        return t;
+    }
+
+    private Type tipoResultado(String izq, String der, CodigoContexto ctx) {
+        IntermediateCodeGenerator gen = (IntermediateCodeGenerator) ctx;
+        Type tipoIzq = null;
+        Type tipoDer = null;
+        IntermediateCodeGenerator.ValueInfo infoIzq = gen.describeValue(izq);
+        if (infoIzq != null) tipoIzq = infoIzq.type;
+        IntermediateCodeGenerator.ValueInfo infoDer = gen.describeValue(der);
+        if (infoDer != null) tipoDer = infoDer.type;
+        switch (operador) {
+            case "==": case "!=": case "<": case ">": case "<=": case ">=":
+                return Type.BOOL;
+            default:
+                return TypeCompat.tipoAritmetico(tipoIzq, tipoDer);
+        }
+    }
+
+    private String traducirCortocircuito(CodigoContexto ctx) {
+        IntermediateCodeGenerator gen = (IntermediateCodeGenerator) ctx;
+        String izq = izquierda.traducir(ctx);
+        String t = ctx.nuevoTemporal();
+        gen.recordTemporalType(t, Type.BOOL);
+        String constante = operador.equals("&&") ? "false" : "true";
+        String corto = ctx.nuevaEtiqueta();
+        ctx.emitir(operador.equals("&&") ? "if_false" : "if_true", izq, null, corto);
+        String der = derecha.traducir(ctx);
+        ctx.emitir("=", der, null, t);
+        String end = ctx.nuevaEtiqueta();
+        ctx.emitir("goto", null, null, end);
+        ctx.emitir("label", null, null, corto);
+        ctx.emitir("=", constante, null, t);
+        ctx.emitir("label", null, null, end);
+        return t;
     }
     @Override
     public Type analizar(ContextoSemantico ctx) {

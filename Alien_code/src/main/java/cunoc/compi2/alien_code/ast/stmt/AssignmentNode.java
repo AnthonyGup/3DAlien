@@ -38,6 +38,9 @@ public class AssignmentNode implements Node {
 
     @Override
     public String traducir(CodigoContexto ctx) {
+        String value = valor.traducir(ctx);
+        String target = destino.toLvalue(ctx);
+        ctx.emitir("=", value, null, target);
         return null;
     }
     @Override

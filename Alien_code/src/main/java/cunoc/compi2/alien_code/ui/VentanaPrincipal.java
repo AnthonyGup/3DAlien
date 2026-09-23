@@ -15,6 +15,8 @@ import cunoc.compi2.alien_code.ast.decl.ClassDeclNode;
 import cunoc.compi2.alien_code.ast.program.ImportNode;
 import cunoc.compi2.alien_code.ast.program.ProgramNode;
 import cunoc.compi2.alien_code.errors.ErrorListener;
+import cunoc.compi2.alien_code.ir.Cuarteta;
+import cunoc.compi2.alien_code.ir.IntermediateCodeGenerator;
 import cunoc.compi2.alien_code.pigLatin.astbuilder.PigLatinASTBuilder;
 import cunoc.compi2.alien_code.ylang.astbuilder.YLangASTBuilder;
 import cunoc.compi2.alien_code.zetariano.astbuilder.ZetarianoASTBuilder;
@@ -223,7 +225,7 @@ public class VentanaPrincipal extends JFrame {
         if (archivo != null && (extension.equals("pig") || extension.equals("y") || extension.equals("z"))) {
             ejecutarPipelineSemantico(archivo, log, ventanaErrores);
         } else {
-            log.agregarPendiente("> An\u00e1lisis sem\u00e1ntico, cuartetas, C3D y C: pendiente (backend en desarrollo).");
+            log.agregarPendiente("> C3D y C: pendiente (P8/P9).");
         }
     }
 
@@ -285,6 +287,22 @@ public class VentanaPrincipal extends JFrame {
 
         log.agregarExito("An\u00e1lisis sem\u00e1ntico completado.");
         mostrarSimbolos(analizador.getSymbolTable());
+
+        ventanaCuartetas.limpiar();
+        IntermediateCodeGenerator generador = new IntermediateCodeGenerator(errores);
+        generador.setSymbolTable(analizador.getSymbolTable());
+        for (ProgramNode p : programas) {
+            p.traducir(generador);
+        }
+        List<Object[]> filasCuartetas = new ArrayList<>();
+        int contador = 0;
+        for (Cuarteta cuarteta : generador.getCuartetas()) {
+            filasCuartetas.add(new Object[]{++contador, cuarteta.operador,
+                cuarteta.operando1, cuarteta.operando2, cuarteta.resultado});
+        }
+        ventanaCuartetas.setDatos(filasCuartetas);
+        log.agregarExito("Cuartetas generadas: " + contador
+            + ". Ver Reportes > Ver cuartetas.");
     }
 
     private ProgramNode construirAST(File archivo) {

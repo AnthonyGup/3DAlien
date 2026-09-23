@@ -5,6 +5,8 @@ import cunoc.compi2.alien_code.ir.CodigoContexto;
 import cunoc.compi2.alien_code.ast.ASTVisitor;
 
 import cunoc.compi2.alien_code.ast.Node;
+import cunoc.compi2.alien_code.ir.CodigoContexto;
+import cunoc.compi2.alien_code.ir.IntermediateCodeGenerator;
 
 public class DoWhileNode implements Node {
     public BlockNode cuerpo;
@@ -33,6 +35,20 @@ public class DoWhileNode implements Node {
 
     @Override
     public String traducir(CodigoContexto ctx) {
+        IntermediateCodeGenerator gen = (IntermediateCodeGenerator) ctx;
+        String start = ctx.nuevaEtiqueta();
+        String cont = ctx.nuevaEtiqueta();
+        String end = ctx.nuevaEtiqueta();
+        ctx.emitir("label", null, null, start);
+        ctx.empujarCiclo(cont, end);
+        gen.entrarAmbitoTraduccion();
+        cuerpo.traducir(ctx);
+        gen.salirAmbitoTraduccion();
+        ctx.popCiclo();
+        ctx.emitir("label", null, null, cont);
+        String cond = condicion.traducir(ctx);
+        ctx.emitir("if_true", cond, null, start);
+        ctx.emitir("label", null, null, end);
         return null;
     }
     @Override

@@ -29,6 +29,7 @@ public class BreakNode implements Node {
 
     @Override
     public String traducir(CodigoContexto ctx) {
+        ctx.emitir("goto", null, null, ctx.etiquetaSalidaActual());
         return null;
     }
     @Override

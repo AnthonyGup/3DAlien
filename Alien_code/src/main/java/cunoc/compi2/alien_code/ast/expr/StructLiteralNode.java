@@ -36,7 +36,12 @@ public class StructLiteralNode implements Node {
 
     @Override
     public String traducir(CodigoContexto ctx) {
-        return null;
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < valores.size(); i++) {
+            if (i > 0) sb.append(", ");
+            sb.append(valores.get(i).traducir(ctx));
+        }
+        return "{" + sb + "}";
     }
     @Override
     public Type analizar(ContextoSemantico ctx) {

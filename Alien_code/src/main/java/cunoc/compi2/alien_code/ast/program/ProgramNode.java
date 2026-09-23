@@ -33,6 +33,12 @@ public class ProgramNode implements Node {
 
     @Override
     public String traducir(CodigoContexto ctx) {
+        for (Node declaracion : declarations) {
+            declaracion.traducir(ctx);
+        }
+        if ("Pig Latin".equals(sourceLanguage)) {
+            ctx.emitir("halt", null, null, null);
+        }
         return null;
     }
     @Override

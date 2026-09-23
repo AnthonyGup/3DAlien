@@ -34,6 +34,9 @@ public class BlockNode implements Node {
 
     @Override
     public String traducir(CodigoContexto ctx) {
+        for (Node sentencia : sentencias) {
+            sentencia.traducir(ctx);
+        }
         return null;
     }
     @Override

@@ -5,7 +5,9 @@ import cunoc.compi2.alien_code.ast.Node;
 import cunoc.compi2.alien_code.ast.Type;
 import cunoc.compi2.alien_code.ast.stmt.BlockNode;
 import cunoc.compi2.alien_code.ir.CodigoContexto;
+import cunoc.compi2.alien_code.ir.IntermediateCodeGenerator;
 import cunoc.compi2.alien_code.semantic.ContextoSemantico;
+import cunoc.compi2.alien_code.semantic.Symbol;
 
 import java.util.List;
 
@@ -40,6 +42,16 @@ public class FunctionDeclNode implements Node {
 
     @Override
     public String traducir(CodigoContexto ctx) {
+        IntermediateCodeGenerator gen = (IntermediateCodeGenerator) ctx;
+        ctx.emitir("func", nombre, String.valueOf(parametros.size()), null);
+        gen.entrarAmbitoTraduccion();
+        for (ParameterNode p : parametros) {
+            gen.definirEnTraduccion(Symbol.variable(p.nombre, p.tipo, p.tipoElemento, p.tipoNombre,
+                    p.dimensiones, true, false, p.getLine(), p.getColumn()));
+        }
+        cuerpo.traducir(ctx);
+        gen.salirAmbitoTraduccion();
+        ctx.emitir("func_end", nombre, null, null);
         return null;
     }
 

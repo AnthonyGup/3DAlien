@@ -2,6 +2,7 @@ package cunoc.compi2.alien_code.ast.stmt;
 import cunoc.compi2.alien_code.ast.Type;
 import cunoc.compi2.alien_code.semantic.ContextoSemantico;
 import cunoc.compi2.alien_code.ir.CodigoContexto;
+import cunoc.compi2.alien_code.ir.IntermediateCodeGenerator;
 import cunoc.compi2.alien_code.ast.ASTVisitor;
 
 import cunoc.compi2.alien_code.ast.Node;
@@ -33,6 +34,14 @@ public class ReadNode implements Node {
 
     @Override
     public String traducir(CodigoContexto ctx) {
+        if (destino != null) {
+            IntermediateCodeGenerator gen = (IntermediateCodeGenerator) ctx;
+            String t = ctx.nuevoTemporal();
+            gen.recordTemporalType(t, Type.STRING);
+            ctx.emitir("read", null, null, t);
+            String target = destino.toLvalue(ctx);
+            ctx.emitir("=", t, null, target);
+        }
         return null;
     }
     @Override

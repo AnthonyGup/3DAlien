@@ -31,6 +31,12 @@ public class ReturnNode implements Node {
 
     @Override
     public String traducir(CodigoContexto ctx) {
+        if (expresion != null) {
+            String value = expresion.traducir(ctx);
+            ctx.emitir("return", value, null, null);
+        } else {
+            ctx.emitir("return", null, null, null);
+        }
         return null;
     }
 

@@ -65,6 +65,10 @@ public class Symbol {
 
     public List<Type> getTiposParametros() { return tiposParametros; }
 
+    public List<List<Type>> getFirmas() { return firmas; }
+
+    public List<List<Type>> getFirmasConstructores() { return firmasConstructores; }
+
     public static Symbol variable(String nombre, Type tipoDeclarado, Type tipoElemento,
             String tipoNombre, int dimensiones, boolean isParameter, boolean isField,
             int line, int column) {

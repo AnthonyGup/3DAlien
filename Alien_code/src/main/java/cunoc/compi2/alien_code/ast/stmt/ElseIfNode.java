@@ -5,6 +5,8 @@ import cunoc.compi2.alien_code.ir.CodigoContexto;
 import cunoc.compi2.alien_code.ast.ASTVisitor;
 
 import cunoc.compi2.alien_code.ast.Node;
+import cunoc.compi2.alien_code.ir.CodigoContexto;
+import cunoc.compi2.alien_code.ir.IntermediateCodeGenerator;
 
 public class ElseIfNode implements Node {
     public Node condicion;
@@ -37,6 +39,24 @@ public class ElseIfNode implements Node {
 
     @Override
     public String traducir(CodigoContexto ctx) {
+        IntermediateCodeGenerator gen = (IntermediateCodeGenerator) ctx;
+        if (esElse()) {
+            gen.entrarAmbitoTraduccion();
+            if (cuerpo != null) {
+                cuerpo.traducir(ctx);
+            }
+            gen.salirAmbitoTraduccion();
+            return null;
+        }
+        String cond = condicion.traducir(ctx);
+        String next = ctx.nuevaEtiqueta();
+        ctx.emitir("if_false", cond, null, next);
+        gen.entrarAmbitoTraduccion();
+        if (cuerpo != null) {
+            cuerpo.traducir(ctx);
+        }
+        gen.salirAmbitoTraduccion();
+        ctx.emitir("label", null, null, next);
         return null;
     }
     @Override

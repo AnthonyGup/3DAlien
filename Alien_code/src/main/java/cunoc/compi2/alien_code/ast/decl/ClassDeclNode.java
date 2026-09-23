@@ -5,6 +5,7 @@ import cunoc.compi2.alien_code.ast.Node;
 import cunoc.compi2.alien_code.ast.Type;
 import cunoc.compi2.alien_code.ast.stmt.VariableDeclNode;
 import cunoc.compi2.alien_code.ir.CodigoContexto;
+import cunoc.compi2.alien_code.ir.IntermediateCodeGenerator;
 import cunoc.compi2.alien_code.semantic.ContextoSemantico;
 import cunoc.compi2.alien_code.semantic.Symbol;
 
@@ -41,6 +42,12 @@ public class ClassDeclNode implements Node {
 
     @Override
     public String traducir(CodigoContexto ctx) {
+        IntermediateCodeGenerator gen = (IntermediateCodeGenerator) ctx;
+        Symbol clase = gen.resolveForTranslation(nombre);
+        gen.pushClassTranslation(nombre, clase != null ? clase.getMiembros() : null);
+        for (ConstructorDeclNode c : constructores) c.traducir(ctx);
+        for (MethodDeclNode m : metodos) m.traducir(ctx);
+        gen.popClassTranslation();
         return null;
     }
 

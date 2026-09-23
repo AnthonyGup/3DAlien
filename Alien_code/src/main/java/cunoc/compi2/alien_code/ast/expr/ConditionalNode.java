@@ -4,6 +4,7 @@ import cunoc.compi2.alien_code.ast.ASTVisitor;
 import cunoc.compi2.alien_code.ast.Node;
 import cunoc.compi2.alien_code.ast.Type;
 import cunoc.compi2.alien_code.ir.CodigoContexto;
+import cunoc.compi2.alien_code.ir.IntermediateCodeGenerator;
 import cunoc.compi2.alien_code.semantic.ContextoSemantico;
 import cunoc.compi2.alien_code.semantic.TypeCompat;
 
@@ -35,7 +36,32 @@ public class ConditionalNode implements Node {
 
     @Override
     public String traducir(CodigoContexto ctx) {
-        return null;
+        IntermediateCodeGenerator gen = (IntermediateCodeGenerator) ctx;
+        String cond = condicion.traducir(ctx);
+        String t = ctx.nuevoTemporal();
+        String falso = ctx.nuevaEtiqueta();
+        ctx.emitir("if_false", cond, null, falso);
+        String v = siVerdadero.traducir(ctx);
+        ctx.emitir("=", v, null, t);
+        String end = ctx.nuevaEtiqueta();
+        ctx.emitir("goto", null, null, end);
+        ctx.emitir("label", null, null, falso);
+        String f = siFalso.traducir(ctx);
+        ctx.emitir("=", f, null, t);
+        ctx.emitir("label", null, null, end);
+        gen.recordTemporalType(t, tipoResultado(v, f, gen));
+        return t;
+    }
+
+    private Type tipoResultado(String v, String f, IntermediateCodeGenerator gen) {
+        IntermediateCodeGenerator.ValueInfo iv = gen.describeValue(v);
+        IntermediateCodeGenerator.ValueInfo iff = gen.describeValue(f);
+        Type tipoV = iv != null ? iv.type : null;
+        Type tipoF = iff != null ? iff.type : null;
+        if (TypeCompat.esNumerico(tipoV) && TypeCompat.esNumerico(tipoF)) {
+            return tipoV == Type.FLOAT || tipoF == Type.FLOAT ? Type.FLOAT : Type.INT;
+        }
+        return tipoV != null ? tipoV : tipoF;
     }
 
     @Override
