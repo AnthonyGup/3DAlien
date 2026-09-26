@@ -52,13 +52,40 @@ public class BinaryOpNode extends Expresion {
         Type tipoDer = Operandos.tipoOperando(ctx, der);
         if (operador.equals("+") && (tipoIzq == Type.STRING || tipoDer == Type.STRING)) {
             MemoryAccess t = Operandos.temporal(ctx, "char*");
-            ctx.agregar(new Llamada3D("conc", List.of(izq, der), t));
+            MemoryAccess arg1 = izq;
+            MemoryAccess arg2 = der;
+            if (tipoIzq != Type.STRING) {
+                arg1 = convertirAString(ctx, tipoIzq, izq);
+            }
+            if (tipoDer != Type.STRING) {
+                arg2 = convertirAString(ctx, tipoDer, der);
+            }
+            ctx.agregar(new Llamada3D("conc", List.of(arg1, arg2), t));
             return t;
         }
         String ctype = TiposC.binaryResultType(tipoIzq, tipoDer, operador);
         MemoryAccess t = Operandos.temporal(ctx, ctype);
         ctx.agregar(new Operacion3D(operador, izq, der, t));
         return t;
+    }
+
+    private MemoryAccess convertirAString(CodigoContexto ctx, Type tipo, MemoryAccess valor) {
+        if (tipo == Type.INT || tipo == Type.BOOL) {
+            MemoryAccess t = Operandos.temporal(ctx, "char*");
+            ctx.agregar(new Llamada3D("strd", List.of(valor), t));
+            return t;
+        }
+        if (tipo == Type.FLOAT) {
+            MemoryAccess t = Operandos.temporal(ctx, "char*");
+            ctx.agregar(new Llamada3D("strn", List.of(valor), t));
+            return t;
+        }
+        if (tipo == Type.CHAR) {
+            MemoryAccess t = Operandos.temporal(ctx, "char*");
+            ctx.agregar(new Llamada3D("strd", List.of(valor), t));
+            return t;
+        }
+        return valor;
     }
 
     private MemoryAccess traducirCortocircuito(CodigoContexto ctx) {

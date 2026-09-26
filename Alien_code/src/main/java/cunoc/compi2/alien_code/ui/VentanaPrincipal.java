@@ -73,9 +73,7 @@ public class VentanaPrincipal extends JFrame {
         menuBar.setOnNuevoArchivo(e -> crearNuevoArchivo(arbol));
         menuBar.setOnAbrirCarpeta(e -> abrirCarpetaProyecto());
         menuBar.setOnGuardar(e -> guardar(tabs));
-        menuBar.setOnDescargarProyecto(e -> descargarProyecto());
         menuBar.setOnSalir(e -> dispose());
-        menuBar.setOnCompilar(e -> compilar(log));
         menuBar.setOnCompilarMain(e -> compilarMainPig(log));
         menuBar.setOnLimpiarLog(e -> log.limpiar());
         menuBar.setOnVerErrores(e -> ventanaErrores.setVisible(true));
@@ -132,105 +130,6 @@ public class VentanaPrincipal extends JFrame {
             mainPanel.getPanelLog().agregar("Guardado: " + archivo.getName());
         } catch (java.io.IOException ex) {
             JOptionPane.showMessageDialog(this, "No se pudo guardar el archivo.", "Error", JOptionPane.ERROR_MESSAGE);
-        }
-    }
-
-    private void descargarProyecto() {
-        if (carpetaProyecto == null) {
-            JOptionPane.showMessageDialog(this, "No hay proyecto abierto.");
-            return;
-        }
-        JFileChooser chooser = new JFileChooser();
-        chooser.setDialogTitle("Guardar proyecto comprimido (zip)");
-        chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
-        if (chooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
-            File destino = new File(chooser.getSelectedFile(), carpetaProyecto.getName() + ".zip");
-            try {
-                comprimirZip(carpetaProyecto, destino);
-                mainPanel.getPanelLog().agregar("Proyecto descargado: " + destino.getAbsolutePath());
-            } catch (java.io.IOException ex) {
-                JOptionPane.showMessageDialog(this, "No se pudo comprimir el proyecto.", "Error", JOptionPane.ERROR_MESSAGE);
-            }
-        }
-    }
-
-    private void comprimirZip(File origen, File destino) throws java.io.IOException {
-        try (java.util.zip.ZipOutputStream zos =
-                new java.util.zip.ZipOutputStream(new java.io.FileOutputStream(destino))) {
-            comprimirDirectorio(origen, origen.getName(), zos);
-        }
-    }
-
-    private void comprimirDirectorio(File dir, String base, java.util.zip.ZipOutputStream zos)
-            throws java.io.IOException {
-        File[] archivos = dir.listFiles();
-        if (archivos == null) return;
-        byte[] buffer = new byte[4096];
-        for (File archivo : archivos) {
-            String rutaRelativa = base + "/" + archivo.getName();
-            if (archivo.isDirectory()) {
-                zos.putNextEntry(new java.util.zip.ZipEntry(rutaRelativa + "/"));
-                zos.closeEntry();
-                comprimirDirectorio(archivo, rutaRelativa, zos);
-            } else {
-                zos.putNextEntry(new java.util.zip.ZipEntry(rutaRelativa));
-                try (java.io.FileInputStream fis = new java.io.FileInputStream(archivo)) {
-                    int leidos;
-                    while ((leidos = fis.read(buffer)) > 0) {
-                        zos.write(buffer, 0, leidos);
-                    }
-                }
-                zos.closeEntry();
-            }
-        }
-    }
-
-    private void compilar(PanelLog log) {
-        log.limpiar();
-        ventanaErrores.limpiar();
-        ventanaSimbolos.limpiar();
-
-        EditorPanel editor = mainPanel.getEditorTabs().getEditorSeleccionado();
-        if (editor == null) {
-            log.agregarError("No hay ninguna pestaña abierta.");
-            return;
-        }
-
-        File archivo = editor.getArchivo();
-        VerificadorSintactico verificador = new VerificadorSintactico();
-        VerificadorSintactico.Resultado resultado = verificador.verificar(editor.getText(), archivo);
-
-        String nombreArchivo = archivo == null ? "(sin archivo)" : archivo.getName();
-        log.agregarInfo("> Compilando " + nombreArchivo + (resultado.extensionValida ? " (" + resultado.lenguaje + ")" : ""));
-
-        if (!resultado.extensionValida) {
-            log.agregarError("Extensión no reconocida. Usa .y, .z o .pig.");
-            return;
-        }
-
-        log.agregarInfo("> Análisis léxico: " + resultado.cantidadTokens + " tokens encontrados.");
-        log.agregarInfo("> Análisis sintáctico...");
-
-        if (resultado.hayErrores()) {
-            List<Object[]> filas = new ArrayList<>();
-            for (VerificadorSintactico.ErrorSintactico error : resultado.errores) {
-                filas.add(new Object[]{"Sintáctico", error.mensaje, error.linea, error.columna});
-                log.agregarError("[Sintáctico] "
-                    + (error.linea > 0 ? "Línea " + error.linea + ", Columna " + error.columna + ": " : "")
-                    + error.mensaje);
-            }
-            ventanaErrores.setDatos(filas);
-            log.agregarError("Se detectaron " + resultado.errores.size()
-                + " error(es) sintácticos. Ver Reportes > Ver errores.");
-            return;
-        }
-
-        log.agregarExito("Sin errores sintácticos.");
-        String extension = extensionDe(archivo);
-        if (archivo != null && (extension.equals("pig") || extension.equals("y") || extension.equals("z"))) {
-            ejecutarPipelineSemantico(archivo, log, ventanaErrores);
-        } else {
-            log.agregarPendiente("> C3D y C: pendiente (P8/P9).");
         }
     }
 
@@ -489,7 +388,7 @@ public class VentanaPrincipal extends JFrame {
             log.agregarPendiente("Compila un archivo primero para generar código C.");
             return;
         }
-        VentanaCodigoC ventana = new VentanaCodigoC(this, "Código C generado", codigoCActual, log);
+        VentanaCodigoC ventana = new VentanaCodigoC(this, "Código C generado", codigoCActual, log, carpetaProyecto);
         ventana.setVisible(true);
     }
 

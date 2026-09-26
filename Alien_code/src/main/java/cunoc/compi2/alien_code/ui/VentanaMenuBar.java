@@ -11,7 +11,6 @@ import javax.swing.JMenuItem;
 
 public class VentanaMenuBar extends JMenuBar {
 
-    private final JButton botonCompilar;
     private final JButton botonCompilarMain;
     private final JButton botonLimpiarLog;
 
@@ -21,8 +20,6 @@ public class VentanaMenuBar extends JMenuBar {
         menuArchivo.add(item("Abrir carpeta de proyecto"));
         menuArchivo.addSeparator();
         menuArchivo.add(item("Guardar"));
-        menuArchivo.addSeparator();
-        menuArchivo.add(item("Descargar proyecto (zip)"));
         menuArchivo.addSeparator();
         menuArchivo.add(item("Salir"));
         add(menuArchivo);
@@ -38,9 +35,6 @@ public class VentanaMenuBar extends JMenuBar {
         JMenu menuAyuda = new JMenu("Ayuda");
         menuAyuda.add(item("Acerca de"));
         add(menuAyuda);
-
-        botonCompilar = crearBoton("Compilar");
-        add(botonCompilar);
 
         botonCompilarMain = crearBoton("Compilar main (.pig)");
         add(botonCompilarMain);
@@ -76,15 +70,13 @@ public class VentanaMenuBar extends JMenuBar {
     public void setOnNuevoArchivo(ActionListener l) { anclar(0, l); }
     public void setOnAbrirCarpeta(ActionListener l) { anclar(1, l); }
     public void setOnGuardar(ActionListener l) { anclar(3, l); }
-    public void setOnDescargarProyecto(ActionListener l) { anclar(5, l); }
-    public void setOnSalir(ActionListener l) { anclar(7, l); }
+    public void setOnSalir(ActionListener l) { anclar(5, l); }
     public void setOnVerErrores(ActionListener l) { anclarReportes(0, l); }
     public void setOnVerSimbolos(ActionListener l) { anclarReportes(1, l); }
     public void setOnVerCuartetas(ActionListener l) { anclarReportes(2, l); }
     public void setOnVerC3D(ActionListener l) { anclarReportes(3, l); }
     public void setOnVerCodigoC(ActionListener l) { anclarReportes(4, l); }
     public void setOnAcercaDe(ActionListener l) { anclarAyuda(0, l); }
-    public void setOnCompilar(ActionListener l) { botonCompilar.addActionListener(l); }
     public void setOnCompilarMain(ActionListener l) { botonCompilarMain.addActionListener(l); }
     public void setOnLimpiarLog(ActionListener l) { botonLimpiarLog.addActionListener(l); }
 

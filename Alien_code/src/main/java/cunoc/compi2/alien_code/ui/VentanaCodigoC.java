@@ -25,10 +25,12 @@ public class VentanaCodigoC extends JDialog {
 
     private final JTextArea area;
     private final PanelLog log;
+    private final File carpetaProyecto;
 
-    public VentanaCodigoC(Window propietario, String titulo, String contenido, PanelLog log) {
+    public VentanaCodigoC(Window propietario, String titulo, String contenido, PanelLog log, File carpetaProyecto) {
         super(propietario, titulo);
         this.log = log;
+        this.carpetaProyecto = carpetaProyecto;
         area = new JTextArea();
         area.setEditable(false);
         area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 13));
@@ -60,7 +62,11 @@ public class VentanaCodigoC extends JDialog {
     private void guardar() {
         JFileChooser chooser = new JFileChooser();
         chooser.setDialogTitle("Guardar código C");
-        chooser.setSelectedFile(new File("codigo.c"));
+        // Default a la carpeta del proyecto si existe
+        if (carpetaProyecto != null && carpetaProyecto.isDirectory()) {
+            chooser.setCurrentDirectory(carpetaProyecto);
+        }
+        chooser.setSelectedFile(new File("programa.c"));
         if (chooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
             File destino = chooser.getSelectedFile();
             try {
@@ -79,16 +85,23 @@ public class VentanaCodigoC extends JDialog {
             return;
         }
 
-        File tempDir = new File(System.getProperty("java.io.tmpdir"), "3dalien_build_" + System.currentTimeMillis());
-        if (!tempDir.mkdirs()) {
-            log.agregarError("No se pudo crear directorio temporal.");
-            return;
+        // Usar la carpeta del proyecto/build si existe, si no temporal
+        File baseDir;
+        if (carpetaProyecto != null && carpetaProyecto.isDirectory()) {
+            baseDir = new File(carpetaProyecto, "build");
+        } else {
+            baseDir = new File(System.getProperty("user.dir"), "build");
         }
-        File cFile = new File(tempDir, "programa.c");
+        if (!baseDir.exists()) {
+            baseDir.mkdirs();
+        }
+
+        File cFile = new File(baseDir, "programa.c");
         try {
             Files.writeString(cFile.toPath(), area.getText(), StandardCharsets.UTF_8);
+            log.agregarInfo("> Código C guardado en: " + cFile.getAbsolutePath());
         } catch (IOException ex) {
-            log.agregarError("No se pudo escribir .c temporal: " + ex.getMessage());
+            log.agregarError("No se pudo escribir .c: " + ex.getMessage());
             return;
         }
 
@@ -98,7 +111,7 @@ public class VentanaCodigoC extends JDialog {
             return;
         }
 
-        File exeFile = new File(tempDir, esWindows() ? "programa.exe" : "programa");
+        File exeFile = new File(baseDir, esWindows() ? "programa.exe" : "programa");
         List<String> cmd = new ArrayList<>();
         cmd.add(compilador);
         if (compilador.contains("cl.exe")) {
@@ -110,10 +123,10 @@ public class VentanaCodigoC extends JDialog {
             cmd.add(cFile.getAbsolutePath());
         }
 
-        log.agregarInfo("> Compilando C con " + compilador + "...");
+        log.agregarInfo("> Compilando C con " + compilador + " en " + baseDir.getAbsolutePath() + "...");
         try {
             ProcessBuilder pb = new ProcessBuilder(cmd);
-            pb.directory(tempDir);
+            pb.directory(baseDir);
             pb.redirectErrorStream(true);
             Process proc = pb.start();
             StringBuilder salida = new StringBuilder();

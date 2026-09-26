@@ -42,6 +42,7 @@ public class Symbol {
     public Kind getKind() { return kind; }
     public boolean isArray() { return isArray; }
     public boolean isField() { return isField; }
+    public boolean isParameter() { return isParameter; }
     public int getSize() { return size; }
 
     public boolean isNativa() { return nativa; }

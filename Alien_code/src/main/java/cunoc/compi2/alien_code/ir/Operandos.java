@@ -31,7 +31,16 @@ public final class Operandos {
     }
 
     public static NameAccess nombre(CodigoContexto ctx, String nombre, Symbol simbolo) {
-        boolean autoref = simbolo != null && simbolo.isField() && ctx.currentClassName() != null;
+        boolean autoref = false;
+        if (simbolo != null && simbolo.isField() && ctx.currentClassName() != null) {
+            Symbol claseActual = ctx.resolverSimbolo(ctx.currentClassName());
+            if (claseActual != null && claseActual.getMiembros() != null) {
+                Symbol campoClase = claseActual.getMiembros().resolveLocal(nombre);
+                if (campoClase != null && campoClase == simbolo) {
+                    autoref = true;
+                }
+            }
+        }
         return new NameAccess(nombre, tipoDe(simbolo), simbolo != null ? simbolo.getTipoNombre() : null,
                 autoref, simbolo != null ? simbolo.getDimensiones() : 0);
     }
@@ -84,7 +93,11 @@ public final class Operandos {
         Type tipo = destino.getTipo();
         if (tipo == Type.STRUCT || tipo == Type.CLASS) {
             String nombre = destino.getTipoNombre() != null ? destino.getTipoNombre() : "X";
-            return new Literal3D("&(struct " + nombre + ")" + raw.getTexto(), raw.getTipo());
+            String rawText = raw.getTexto();
+            if ("NULL".equals(rawText)) {
+                return new Literal3D("NULL", raw.getTipo());
+            }
+            return new Literal3D("&(struct " + nombre + ")" + rawText, raw.getTipo());
         }
         return raw;
     }

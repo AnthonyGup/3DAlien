@@ -1,6 +1,9 @@
 package cunoc.compi2.alien_code.codegen;
 
 import cunoc.compi2.alien_code.ast.Type;
+import cunoc.compi2.alien_code.c3d.access.MemoryAccess;
+import cunoc.compi2.alien_code.c3d.access.NameAccess;
+import cunoc.compi2.alien_code.c3d.cuartetas.Asignacion3D;
 import cunoc.compi2.alien_code.c3d.cuartetas.Cuarteta;
 import cunoc.compi2.alien_code.c3d.cuartetas.DeclararArreglo3D;
 import cunoc.compi2.alien_code.c3d.cuartetas.FinFuncion3D;
@@ -149,6 +152,20 @@ public class CCodeGenerator {
         code.append("    if (r) { memcpy(r, a, la); memcpy(r + la, b, lb + 1); }\n");
         code.append("    return r;\n");
         code.append("}\n\n");
+        code.append("char* strd(int n) {\n");
+        code.append("    char buf[32];\n");
+        code.append("    int len = sprintf(buf, \"%%d\", n);\n");
+        code.append("    char* r = (char*)malloc(len + 1);\n");
+        code.append("    if (r) memcpy(r, buf, len + 1);\n");
+        code.append("    return r;\n");
+        code.append("}\n\n");
+        code.append("char* strn(double n) {\n");
+        code.append("    char buf[64];\n");
+        code.append("    int len = sprintf(buf, \"%%g\", n);\n");
+        code.append("    char* r = (char*)malloc(len + 1);\n");
+        code.append("    if (r) memcpy(r, buf, len + 1);\n");
+        code.append("    return r;\n");
+        code.append("}\n\n");
     }
 
     private void variablesGlobales(Map<String, Symbol> simbolos, SymbolTable tabla) {
@@ -174,7 +191,8 @@ public class CCodeGenerator {
         for (DeclararArreglo3D arr : f.arreglos) {
             arreglosMarcados.add(arr.getNombre());
         }
-        emitirDeclaraciones(f.cuerpo, f.parametrosNombres, arreglosMarcados, simbolos, tabla, tiposTemporales);
+        Set<String> variablesLocales = colectarVariablesLocales(f.cuerpo);
+        emitirDeclaraciones(f.cuerpo, f.parametrosNombres, arreglosMarcados, simbolos, tabla, tiposTemporales, variablesLocales);
         for (Cuarteta c : f.cuerpo) {
             c.toCCode(code);
             code.append('\n');
@@ -182,9 +200,22 @@ public class CCodeGenerator {
         code.append("}\n\n");
     }
 
+    private Set<String> colectarVariablesLocales(List<Cuarteta> cuerpo) {
+        Set<String> locales = new LinkedHashSet<>();
+        for (Cuarteta c : cuerpo) {
+            if (c instanceof Asignacion3D a) {
+                MemoryAccess dest = a.getResult();
+                if (dest instanceof NameAccess na && !na.isAutoreferencia()) {
+                    locales.add(na.getNombre());
+                }
+            }
+        }
+        return locales;
+    }
+
     private void emitirDeclaraciones(List<Cuarteta> cuerpo, Set<String> reservados,
             Set<String> arreglosMarcados, Map<String, Symbol> simbolos, SymbolTable tabla,
-            Map<Integer, String> tiposTemporales) {
+            Map<Integer, String> tiposTemporales, Set<String> variablesLocales) {
         Set<String> declaradas = new LinkedHashSet<>();
         StringBuilder texto = new StringBuilder();
         for (Cuarteta c : cuerpo) {
@@ -196,7 +227,7 @@ public class CCodeGenerator {
             if (arreglosMarcados.contains(nombre)) {
                 continue;
             }
-            String tipo = tipoDe(nombre, simbolos, tabla, tiposTemporales);
+            String tipo = tipoDe(nombre, simbolos, tabla, tiposTemporales, variablesLocales);
             if (tipo == null) {
                 continue;
             }
@@ -205,17 +236,21 @@ public class CCodeGenerator {
     }
 
     private String tipoDe(String nombre, Map<String, Symbol> simbolos, SymbolTable tabla,
-            Map<Integer, String> tiposTemporales) {
+            Map<Integer, String> tiposTemporales, Set<String> variablesLocales) {
         if (nombre.matches("t\\d+")) {
             Integer indice = Integer.valueOf(nombre.substring(1));
             String tipo = tiposTemporales.get(indice);
             return tipo != null ? tipo : "int";
         }
-        Symbol s = simbolos.get(nombre);
-        if (s == null || s.getKind() != Symbol.Kind.VARIABLE || s.isField()) {
-            return null;
+        if (variablesLocales.contains(nombre)) {
+            Symbol s = simbolos.get(nombre);
+            if (s != null && s.getKind() == Symbol.Kind.VARIABLE) {
+                return tipoVar(s);
+            }
+            return "int";
         }
-        if (tabla.resolve(nombre) != null) {
+        Symbol s = simbolos.get(nombre);
+        if (s == null || s.getKind() != Symbol.Kind.VARIABLE || s.isField() || s.isParameter()) {
             return null;
         }
         return tipoVar(s);
@@ -225,7 +260,7 @@ public class CCodeGenerator {
             Map<String, Symbol> simbolos, SymbolTable tabla, Map<Integer, String> tiposTemporales) {
         code.append("int main(void) {\n");
         emitirDeclaraciones(cuerpoMain, java.util.Collections.emptySet(),
-                java.util.Collections.emptySet(), simbolos, tabla, tiposTemporales);
+                java.util.Collections.emptySet(), simbolos, tabla, tiposTemporales, java.util.Collections.emptySet());
         if (hayHalt) {
             for (Cuarteta c : cuerpoMain) {
                 c.toCCode(code);
