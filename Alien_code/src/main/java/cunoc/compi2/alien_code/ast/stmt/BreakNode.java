@@ -1,23 +1,18 @@
 package cunoc.compi2.alien_code.ast.stmt;
+import cunoc.compi2.alien_code.ast.Sentencia;
 import cunoc.compi2.alien_code.ast.Type;
-import cunoc.compi2.alien_code.semantic.ContextoSemantico;
+import cunoc.compi2.alien_code.c3d.access.LabelAccess;
+import cunoc.compi2.alien_code.c3d.cuartetas.Goto3D;
 import cunoc.compi2.alien_code.ir.CodigoContexto;
-import cunoc.compi2.alien_code.ast.ASTVisitor;
+import cunoc.compi2.alien_code.semantic.ContextoSemantico;
 
-import cunoc.compi2.alien_code.ast.Node;
-
-public class BreakNode implements Node {
+public class BreakNode extends Sentencia {
     private final int line;
     private final int column;
 
     public BreakNode(int line, int column) {
         this.line = line;
         this.column = column;
-    }
-
-    @Override
-    public <T> T accept(ASTVisitor<T> visitor) {
-        return visitor.visitBreak(this);
     }
 
     @Override
@@ -28,9 +23,11 @@ public class BreakNode implements Node {
 
 
     @Override
-    public String traducir(CodigoContexto ctx) {
-        ctx.emitir("goto", null, null, ctx.etiquetaSalidaActual());
-        return null;
+    public void traducir(CodigoContexto ctx) {
+        String salida = ctx.etiquetaSalidaActual();
+        if (salida != null) {
+            ctx.agregar(new Goto3D(new LabelAccess(salida)));
+        }
     }
     @Override
     public Type analizar(ContextoSemantico ctx) {

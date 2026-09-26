@@ -37,10 +37,6 @@ public class Scope {
         return symbols.get(name);
     }
 
-    public Scope getParent() {
-        return parent;
-    }
-
     public Collection<Symbol> getTodos() {
         return orden;
     }

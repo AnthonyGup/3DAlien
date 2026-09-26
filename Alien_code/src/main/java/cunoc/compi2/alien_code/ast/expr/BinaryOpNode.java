@@ -1,15 +1,25 @@
 package cunoc.compi2.alien_code.ast.expr;
-import cunoc.compi2.alien_code.ast.Type;
-import cunoc.compi2.alien_code.semantic.ContextoSemantico;
-import cunoc.compi2.alien_code.ir.CodigoContexto;
-import cunoc.compi2.alien_code.ast.ASTVisitor;
-
+import cunoc.compi2.alien_code.ast.Expresion;
 import cunoc.compi2.alien_code.ast.Node;
+import cunoc.compi2.alien_code.ast.Type;
+import cunoc.compi2.alien_code.c3d.TiposC;
+import cunoc.compi2.alien_code.c3d.access.LabelAccess;
+import cunoc.compi2.alien_code.c3d.access.Literal3D;
+import cunoc.compi2.alien_code.c3d.access.MemoryAccess;
+import cunoc.compi2.alien_code.c3d.cuartetas.Asignacion3D;
+import cunoc.compi2.alien_code.c3d.cuartetas.Condicional3D;
+import cunoc.compi2.alien_code.c3d.cuartetas.Etiqueta3D;
+import cunoc.compi2.alien_code.c3d.cuartetas.Goto3D;
+import cunoc.compi2.alien_code.c3d.cuartetas.Llamada3D;
+import cunoc.compi2.alien_code.c3d.cuartetas.Operacion3D;
 import cunoc.compi2.alien_code.ir.CodigoContexto;
-import cunoc.compi2.alien_code.ir.IntermediateCodeGenerator;
+import cunoc.compi2.alien_code.ir.Operandos;
+import cunoc.compi2.alien_code.semantic.ContextoSemantico;
 import cunoc.compi2.alien_code.semantic.TypeCompat;
 
-public class BinaryOpNode implements Node {
+import java.util.List;
+
+public class BinaryOpNode extends Expresion {
     public String operador;
     public Node izquierda;
     public Node derecha;
@@ -25,11 +35,6 @@ public class BinaryOpNode implements Node {
     }
 
     @Override
-    public <T> T accept(ASTVisitor<T> visitor) {
-        return visitor.visitBinaryOp(this);
-    }
-
-    @Override
     public int getLine() { return line; }
 
     @Override
@@ -37,49 +42,38 @@ public class BinaryOpNode implements Node {
 
 
     @Override
-    public String traducir(CodigoContexto ctx) {
+    public MemoryAccess traducir(CodigoContexto ctx) {
         if (operador.equals("&&") || operador.equals("||")) {
             return traducirCortocircuito(ctx);
         }
-        String izq = izquierda.traducir(ctx);
-        String der = derecha.traducir(ctx);
-        String t = ctx.nuevoTemporal();
-        ((IntermediateCodeGenerator) ctx).recordTemporalType(t, tipoResultado(izq, der, ctx));
-        ctx.emitir(operador, izq, der, t);
+        MemoryAccess izq = ((Expresion) izquierda).traducir(ctx);
+        MemoryAccess der = ((Expresion) derecha).traducir(ctx);
+        Type tipoIzq = Operandos.tipoOperando(ctx, izq);
+        Type tipoDer = Operandos.tipoOperando(ctx, der);
+        if (operador.equals("+") && (tipoIzq == Type.STRING || tipoDer == Type.STRING)) {
+            MemoryAccess t = Operandos.temporal(ctx, "char*");
+            ctx.agregar(new Llamada3D("conc", List.of(izq, der), t));
+            return t;
+        }
+        String ctype = TiposC.binaryResultType(tipoIzq, tipoDer, operador);
+        MemoryAccess t = Operandos.temporal(ctx, ctype);
+        ctx.agregar(new Operacion3D(operador, izq, der, t));
         return t;
     }
 
-    private Type tipoResultado(String izq, String der, CodigoContexto ctx) {
-        IntermediateCodeGenerator gen = (IntermediateCodeGenerator) ctx;
-        Type tipoIzq = null;
-        Type tipoDer = null;
-        IntermediateCodeGenerator.ValueInfo infoIzq = gen.describeValue(izq);
-        if (infoIzq != null) tipoIzq = infoIzq.type;
-        IntermediateCodeGenerator.ValueInfo infoDer = gen.describeValue(der);
-        if (infoDer != null) tipoDer = infoDer.type;
-        switch (operador) {
-            case "==": case "!=": case "<": case ">": case "<=": case ">=":
-                return Type.BOOL;
-            default:
-                return TypeCompat.tipoAritmetico(tipoIzq, tipoDer);
-        }
-    }
-
-    private String traducirCortocircuito(CodigoContexto ctx) {
-        IntermediateCodeGenerator gen = (IntermediateCodeGenerator) ctx;
-        String izq = izquierda.traducir(ctx);
-        String t = ctx.nuevoTemporal();
-        gen.recordTemporalType(t, Type.BOOL);
-        String constante = operador.equals("&&") ? "false" : "true";
-        String corto = ctx.nuevaEtiqueta();
-        ctx.emitir(operador.equals("&&") ? "if_false" : "if_true", izq, null, corto);
-        String der = derecha.traducir(ctx);
-        ctx.emitir("=", der, null, t);
-        String end = ctx.nuevaEtiqueta();
-        ctx.emitir("goto", null, null, end);
-        ctx.emitir("label", null, null, corto);
-        ctx.emitir("=", constante, null, t);
-        ctx.emitir("label", null, null, end);
+    private MemoryAccess traducirCortocircuito(CodigoContexto ctx) {
+        MemoryAccess izq = ((Expresion) izquierda).traducir(ctx);
+        MemoryAccess t = Operandos.temporal(ctx, "int");
+        boolean and = operador.equals("&&");
+        LabelAccess corto = Operandos.etiqueta(ctx);
+        ctx.agregar(new Condicional3D(!and, izq, corto));
+        MemoryAccess der = ((Expresion) derecha).traducir(ctx);
+        ctx.agregar(new Asignacion3D(t, der));
+        LabelAccess end = Operandos.etiqueta(ctx);
+        ctx.agregar(new Goto3D(end));
+        ctx.agregar(new Etiqueta3D(corto));
+        ctx.agregar(new Asignacion3D(t, new Literal3D(and ? "0" : "1", Type.BOOL)));
+        ctx.agregar(new Etiqueta3D(end));
         return t;
     }
     @Override

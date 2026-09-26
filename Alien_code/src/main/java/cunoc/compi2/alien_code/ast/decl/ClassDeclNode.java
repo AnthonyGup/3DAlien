@@ -1,17 +1,16 @@
 package cunoc.compi2.alien_code.ast.decl;
 
-import cunoc.compi2.alien_code.ast.ASTVisitor;
 import cunoc.compi2.alien_code.ast.Node;
+import cunoc.compi2.alien_code.ast.Sentencia;
 import cunoc.compi2.alien_code.ast.Type;
 import cunoc.compi2.alien_code.ast.stmt.VariableDeclNode;
 import cunoc.compi2.alien_code.ir.CodigoContexto;
-import cunoc.compi2.alien_code.ir.IntermediateCodeGenerator;
 import cunoc.compi2.alien_code.semantic.ContextoSemantico;
 import cunoc.compi2.alien_code.semantic.Symbol;
 
 import java.util.List;
 
-public class ClassDeclNode implements Node {
+public class ClassDeclNode extends Sentencia {
     public String nombre;
     public List<VariableDeclNode> atributos;
     public List<ConstructorDeclNode> constructores;
@@ -30,25 +29,17 @@ public class ClassDeclNode implements Node {
     }
 
     @Override
-    public <T> T accept(ASTVisitor<T> visitor) {
-        return visitor.visitClassDecl(this);
-    }
-
-    @Override
     public int getLine() { return line; }
 
     @Override
     public int getColumn() { return column; }
 
     @Override
-    public String traducir(CodigoContexto ctx) {
-        IntermediateCodeGenerator gen = (IntermediateCodeGenerator) ctx;
-        Symbol clase = gen.resolveForTranslation(nombre);
-        gen.pushClassTranslation(nombre, clase != null ? clase.getMiembros() : null);
+    public void traducir(CodigoContexto ctx) {
+        ctx.pushClassTranslation(nombre);
         for (ConstructorDeclNode c : constructores) c.traducir(ctx);
         for (MethodDeclNode m : metodos) m.traducir(ctx);
-        gen.popClassTranslation();
-        return null;
+        ctx.popClassTranslation();
     }
 
     @Override

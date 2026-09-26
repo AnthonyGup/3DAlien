@@ -1,11 +1,12 @@
 package cunoc.compi2.alien_code.ast.decl;
 
-import cunoc.compi2.alien_code.ast.ASTVisitor;
 import cunoc.compi2.alien_code.ast.Node;
 import cunoc.compi2.alien_code.ast.Type;
 import cunoc.compi2.alien_code.ir.CodigoContexto;
 import cunoc.compi2.alien_code.semantic.ContextoSemantico;
 import cunoc.compi2.alien_code.semantic.Symbol;
+
+import java.util.List;
 
 public class ParameterNode implements Node {
     public Type tipo;
@@ -26,9 +27,36 @@ public class ParameterNode implements Node {
         this.column = column;
     }
 
-    @Override
-    public <T> T accept(ASTVisitor<T> visitor) {
-        return visitor.visitParameter(this);
+    public static String descriptores(List<ParameterNode> parametros) {
+        StringBuilder sb = new StringBuilder();
+        for (ParameterNode p : parametros) {
+            if (sb.length() > 0) sb.append("; ");
+            sb.append(p.descriptor());
+        }
+        return sb.toString();
+    }
+
+    public String descriptor() {
+        Type baseTipo = tipo == Type.ARRAY ? tipoElemento : tipo;
+        String base;
+        if (baseTipo == Type.STRUCT || baseTipo == Type.CLASS) {
+            base = tipoNombre != null ? tipoNombre : "void";
+        } else {
+            base = primitivo(baseTipo);
+        }
+        return nombre + ":" + (tipo == Type.ARRAY ? base + "[]" : base);
+    }
+
+    private static String primitivo(Type t) {
+        switch (t) {
+            case INT: return "int";
+            case FLOAT: return "double";
+            case BOOL: return "bool";
+            case CHAR: return "char";
+            case STRING: return "string";
+            case VOID: return "void";
+            default: return "void";
+        }
     }
 
     @Override
@@ -36,11 +64,6 @@ public class ParameterNode implements Node {
 
     @Override
     public int getColumn() { return column; }
-
-    @Override
-    public String traducir(CodigoContexto ctx) {
-        return null;
-    }
 
     @Override
     public Type analizar(ContextoSemantico ctx) {

@@ -21,16 +21,4 @@ public class ErrorListener {
     public boolean hasErrors() {
         return !errors.isEmpty();
     }
-
-    public void clear() {
-        errors.clear();
-    }
-
-    public String getFormattedErrors() {
-        StringBuilder sb = new StringBuilder();
-        for (CompilerError error : errors) {
-            sb.append(error.toString()).append("\n");
-        }
-        return sb.toString();
-    }
 }

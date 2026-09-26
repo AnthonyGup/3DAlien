@@ -149,19 +149,24 @@ public class YLangASTBuilder extends YLangParserBaseVisitor<Node> {
             return new VariableDeclNode(nombre, tipo.tipo, tipo.tipoNombre, inicial, line(ctx), column(ctx));
         }
         int tamano = 1;
+        StringBuilder dimsTexto = new StringBuilder();
         for (TerminalNode numero : ctx.NUMERO()) {
             tamano *= Integer.parseInt(numero.getText());
+            if (dimsTexto.length() > 0) dimsTexto.append(", ");
+            dimsTexto.append(numero.getText());
         }
         if (inicial == null) {
             ArrayDeclNode arreglo = new ArrayDeclNode(nombre, tamano, tipo.tipo, tipo.tipoNombre,
                     new ArrayList<>(), line(ctx), column(ctx));
             arreglo.dimensiones = ctx.NUMERO().size();
+            arreglo.dims = dimsTexto.toString();
             return arreglo;
         }
         if (inicial instanceof StructLiteralNode literal) {
             ArrayDeclNode arreglo = new ArrayDeclNode(nombre, tamano, tipo.tipo, tipo.tipoNombre,
                     new ArrayList<>(literal.valores), line(ctx), column(ctx));
             arreglo.dimensiones = ctx.NUMERO().size();
+            arreglo.dims = dimsTexto.toString();
             return arreglo;
         }
         VariableDeclNode arreglo = new VariableDeclNode(nombre, Type.ARRAY, tipo.tipoNombre, inicial,

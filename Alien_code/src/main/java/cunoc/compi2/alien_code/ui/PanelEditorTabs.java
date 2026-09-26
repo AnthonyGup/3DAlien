@@ -19,13 +19,6 @@ public class PanelEditorTabs extends JTabbedPane {
         return editor;
     }
 
-    public EditorPanel crearNuevaPestana(String titulo) {
-        EditorPanel editor = new EditorPanel();
-        addTab(titulo, editor);
-        setSelectedComponent(editor);
-        return editor;
-    }
-
     public EditorPanel getEditorSeleccionado() {
         return (EditorPanel) getSelectedComponent();
     }
@@ -39,12 +32,5 @@ public class PanelEditorTabs extends JTabbedPane {
             }
         }
         return null;
-    }
-
-    public void cerrarPestanaSeleccionada() {
-        int index = getSelectedIndex();
-        if (index >= 0) {
-            removeTabAt(index);
-        }
     }
 }

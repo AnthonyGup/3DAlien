@@ -12,6 +12,7 @@ import javax.swing.JMenuItem;
 public class VentanaMenuBar extends JMenuBar {
 
     private final JButton botonCompilar;
+    private final JButton botonCompilarMain;
     private final JButton botonLimpiarLog;
 
     public VentanaMenuBar() {
@@ -40,6 +41,9 @@ public class VentanaMenuBar extends JMenuBar {
 
         botonCompilar = crearBoton("Compilar");
         add(botonCompilar);
+
+        botonCompilarMain = crearBoton("Compilar main (.pig)");
+        add(botonCompilarMain);
 
         botonLimpiarLog = crearBoton("Limpiar log");
         add(botonLimpiarLog);
@@ -81,6 +85,7 @@ public class VentanaMenuBar extends JMenuBar {
     public void setOnVerCodigoC(ActionListener l) { anclarReportes(4, l); }
     public void setOnAcercaDe(ActionListener l) { anclarAyuda(0, l); }
     public void setOnCompilar(ActionListener l) { botonCompilar.addActionListener(l); }
+    public void setOnCompilarMain(ActionListener l) { botonCompilarMain.addActionListener(l); }
     public void setOnLimpiarLog(ActionListener l) { botonLimpiarLog.addActionListener(l); }
 
     private void anclar(int indice, ActionListener l) {

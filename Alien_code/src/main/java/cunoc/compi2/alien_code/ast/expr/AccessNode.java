@@ -1,19 +1,25 @@
 package cunoc.compi2.alien_code.ast.expr;
-import cunoc.compi2.alien_code.ast.Type;
-import cunoc.compi2.alien_code.semantic.ContextoSemantico;
-import cunoc.compi2.alien_code.ir.CodigoContexto;
-import cunoc.compi2.alien_code.ast.ASTVisitor;
-
+import cunoc.compi2.alien_code.ast.Expresion;
 import cunoc.compi2.alien_code.ast.Node;
+import cunoc.compi2.alien_code.ast.Type;
+import cunoc.compi2.alien_code.c3d.access.CampoAccess;
+import cunoc.compi2.alien_code.c3d.access.IndiceAccess;
+import cunoc.compi2.alien_code.c3d.access.Literal3D;
+import cunoc.compi2.alien_code.c3d.access.MemoryAccess;
+import cunoc.compi2.alien_code.c3d.cuartetas.Leer3D;
+import cunoc.compi2.alien_code.c3d.cuartetas.Llamada3D;
 import cunoc.compi2.alien_code.ir.CodigoContexto;
+import cunoc.compi2.alien_code.ir.Impresion;
 import cunoc.compi2.alien_code.ir.IntermediateCodeGenerator;
+import cunoc.compi2.alien_code.ir.Operandos;
+import cunoc.compi2.alien_code.semantic.ContextoSemantico;
 import cunoc.compi2.alien_code.semantic.Symbol;
 import cunoc.compi2.alien_code.semantic.TypeCompat;
 
 import java.util.ArrayList;
 import java.util.List;
 
-public class AccessNode implements Node {
+public class AccessNode extends Expresion {
     public String nombre;
     public List<Sufijo> sufijos;
     private final int line;
@@ -24,15 +30,6 @@ public class AccessNode implements Node {
         this.sufijos = new ArrayList<>();
         this.line = line;
         this.column = column;
-    }
-
-    public boolean conSufijos() {
-        return !sufijos.isEmpty();
-    }
-
-    @Override
-    public <T> T accept(ASTVisitor<T> visitor) {
-        return visitor.visitAccess(this);
     }
 
     @Override
@@ -48,6 +45,8 @@ public class AccessNode implements Node {
         public final String nombreCampo;
         public final Node indice;
         public final List<Node> argumentos;
+        public Symbol resuelto;
+        public String claseObjetivo;
 
         private Sufijo(Tipo tipo, String nombreCampo, Node indice, List<Node> argumentos) {
             this.tipo = tipo;
@@ -71,185 +70,107 @@ public class AccessNode implements Node {
 
 
     @Override
-    public String traducir(CodigoContexto ctx) {
-        IntermediateCodeGenerator gen = (IntermediateCodeGenerator) ctx;
-        String actual = nombre;
-        String pendingMethod = null;
+    public MemoryAccess traducir(CodigoContexto ctx) {
+        Symbol baseSymbol = ctx.resolverSimbolo(nombre);
+        MemoryAccess actual = Operandos.nombre(ctx, nombre, baseSymbol);
+        String metodoPendiente = null;
+        String claseObjetivo = null;
         for (Sufijo s : sufijos) {
             if (s.tipo == Sufijo.Tipo.CAMPO) {
-                if (isMethodName(gen, actual, s.nombreCampo)) {
-                    pendingMethod = s.nombreCampo;
+                if (s.resuelto != null && s.resuelto.getKind() == Symbol.Kind.METODO) {
+                    metodoPendiente = s.nombreCampo;
+                    claseObjetivo = s.claseObjetivo;
                 } else {
-                    String t = ctx.nuevoTemporal();
-                    ctx.emitir(".", actual, s.nombreCampo, t);
-                    registrarCampo(gen, t, actual, s.nombreCampo);
-                    actual = t;
+                    Symbol miembro = s.resuelto;
+                    actual = new CampoAccess(actual, s.nombreCampo, Operandos.tipoDe(miembro),
+                            miembro != null ? miembro.getTipoNombre() : null,
+                            miembro != null ? miembro.getDimensiones() : 0);
                 }
             } else if (s.tipo == Sufijo.Tipo.INDICE) {
-                String idx = s.indice.traducir(ctx);
-                String t = ctx.nuevoTemporal();
-                ctx.emitir("[]", actual, idx, t);
-                registrarElemento(gen, t, actual);
-                actual = t;
+                MemoryAccess indice = ((Expresion) s.indice).traducir(ctx);
+                Symbol elemento = s.resuelto;
+                actual = new IndiceAccess(actual, indice, Operandos.tipoDe(elemento),
+                        elemento != null ? elemento.getTipoNombre() : null,
+                        elemento != null ? elemento.getDimensiones() : 0);
             } else {
-                Symbol target = resolveCallTarget(gen, pendingMethod, actual);
-                StringBuilder args = new StringBuilder();
-                for (Node arg : s.argumentos) {
-                    if (args.length() > 0) args.append(", ");
-                    args.append(arg.traducir(ctx));
+                List<MemoryAccess> argumentos = new ArrayList<>();
+                for (Node argumento : s.argumentos) {
+                    argumentos.add(((Expresion) argumento).traducir(ctx));
                 }
-                if (target != null && target.isNativa()) {
-                    actual = translateNativeCall(gen, target, args.toString(), ctx);
+                Symbol objetivo = s.resuelto;
+                if (objetivo != null && objetivo.isNativa()) {
+                    actual = traducirNativa(ctx, objetivo.getName(), argumentos);
                 } else {
-                    String t = ctx.nuevoTemporal();
-                    String self = selfPara(gen, pendingMethod, target, actual);
-                    String finalArgs = self != null
-                            ? self + (args.length() > 0 ? ", " + args : "")
-                            : args.toString();
-                    String callee = callePara(gen, pendingMethod, target, actual, s.argumentos.size());
-                    gen.recordTemporal(t, target != null ? target.getType() : null,
-                            false, 0, target != null ? target.getTipoNombre() : null);
-                    ctx.emitir("call", callee, finalArgs, t);
-                    actual = t;
+                    MemoryAccess receptor = receiverPara(metodoPendiente, objetivo, actual);
+                    if (receptor != null) {
+                        argumentos.add(0, receptor);
+                    }
+                    String callee = callePara(ctx, metodoPendiente, claseObjetivo, objetivo,
+                            s.argumentos.size());
+                    String ctypeRetorno = tipoRetornoDe(objetivo);
+                    MemoryAccess destino = null;
+                    if (ctypeRetorno != null) {
+                        destino = Operandos.temporal(ctx, ctypeRetorno);
+                    }
+                    ctx.agregar(new Llamada3D(callee, argumentos, destino));
+                    actual = destino;
                 }
-                pendingMethod = null;
+                metodoPendiente = null;
+                claseObjetivo = null;
             }
         }
         return actual;
     }
 
-    public String toLvalue(CodigoContexto ctx) {
-        if (sufijos.isEmpty()) {
-            return nombre;
-        }
-        String actual = nombre;
-        for (int i = 0; i < sufijos.size() - 1; i++) {
-            actual = applyReadSuffix(actual, sufijos.get(i), ctx);
-        }
-        Sufijo last = sufijos.get(sufijos.size() - 1);
-        if (last.tipo == Sufijo.Tipo.CAMPO) {
-            return actual + "." + last.nombreCampo;
-        }
-        if (last.tipo == Sufijo.Tipo.INDICE) {
-            return actual + "[" + last.indice.traducir(ctx) + "]";
-        }
-        return actual;
+    public MemoryAccess toLvalue(CodigoContexto ctx) {
+        return traducir(ctx);
     }
 
-    private String applyReadSuffix(String actual, Sufijo s, CodigoContexto ctx) {
-        IntermediateCodeGenerator gen = (IntermediateCodeGenerator) ctx;
-        if (s.tipo == Sufijo.Tipo.CAMPO) {
-            String t = ctx.nuevoTemporal();
-            ctx.emitir(".", actual, s.nombreCampo, t);
-            registrarCampo(gen, t, actual, s.nombreCampo);
-            return t;
-        }
-        if (s.tipo == Sufijo.Tipo.INDICE) {
-            String idx = s.indice.traducir(ctx);
-            String t = ctx.nuevoTemporal();
-            ctx.emitir("[]", actual, idx, t);
-            registrarElemento(gen, t, actual);
-            return t;
-        }
-        return actual;
-    }
-
-    private boolean isMethodName(IntermediateCodeGenerator gen, String actual, String campo) {
-        IntermediateCodeGenerator.ValueInfo info = gen.describeValue(actual);
-        if (info == null || (info.type != Type.STRUCT && info.type != Type.CLASS)) {
-            return false;
-        }
-        if (info.tipoNombre == null) {
-            return false;
-        }
-        Symbol contenedor = gen.resolveForTranslation(info.tipoNombre);
-        if (contenedor == null || contenedor.getMiembros() == null) {
-            return false;
-        }
-        Symbol miembro = contenedor.getMiembros().resolve(campo);
-        return miembro != null && miembro.getKind() == Symbol.Kind.METODO;
-    }
-
-    private Symbol resolveCallTarget(IntermediateCodeGenerator gen, String pendingMethod, String actual) {
-        if (pendingMethod != null) {
-            IntermediateCodeGenerator.ValueInfo info = gen.describeValue(actual);
-            if (info == null || info.tipoNombre == null) {
-                return null;
-            }
-            Symbol contenedor = gen.resolveForTranslation(info.tipoNombre);
-            if (contenedor == null || contenedor.getMiembros() == null) {
-                return null;
-            }
-            return contenedor.getMiembros().resolve(pendingMethod);
-        }
-        return gen.resolveForTranslation(actual);
-    }
-
-    private String selfPara(IntermediateCodeGenerator gen, String pendingMethod, Symbol target, String actual) {
-        if (pendingMethod != null) {
+    private MemoryAccess receiverPara(String metodoPendiente, Symbol objetivo, MemoryAccess actual) {
+        if (metodoPendiente != null) {
             return actual;
         }
-        if (target != null && target.getKind() == Symbol.Kind.METODO) {
-            return "self";
+        if (objetivo != null && objetivo.getKind() == Symbol.Kind.METODO) {
+            return new Literal3D("self", Type.CLASS);
         }
         return null;
     }
 
-    private String callePara(IntermediateCodeGenerator gen, String pendingMethod, Symbol target,
-            String actual, int argCount) {
-        List<List<Type>> firmas = target != null ? target.getFirmas() : java.util.Collections.emptyList();
-        if (pendingMethod != null) {
-            IntermediateCodeGenerator.ValueInfo info = gen.describeValue(actual);
-            String nombreClase = info != null ? info.tipoNombre : "";
+    private String callePara(CodigoContexto ctx, String metodoPendiente, String claseObjetivo,
+            Symbol objetivo, int argCount) {
+        List<List<Type>> firmas = objetivo != null
+                ? objetivo.getFirmas() : java.util.Collections.emptyList();
+        IntermediateCodeGenerator gen = (IntermediateCodeGenerator) ctx;
+        if (metodoPendiente != null) {
             int idx = gen.overloadIndexByArgCount(firmas, argCount);
-            return nombreClase + "_" + pendingMethod + "_" + idx;
+            return claseObjetivo + "_" + metodoPendiente + "_" + idx;
         }
-        if (target != null && target.getKind() == Symbol.Kind.METODO) {
+        if (objetivo != null && objetivo.getKind() == Symbol.Kind.METODO) {
             int idx = gen.overloadIndexByArgCount(firmas, argCount);
-            return gen.currentClassName() + "_" + target.getName() + "_" + idx;
+            return ctx.currentClassName() + "_" + objetivo.getName() + "_" + idx;
         }
         return nombre;
     }
 
-    private String translateNativeCall(IntermediateCodeGenerator gen, Symbol target, String args,
-            CodigoContexto ctx) {
-        if (target.getName().equals("leer") || target.getName().equals("readln")) {
-            String t = ctx.nuevoTemporal();
-            gen.recordTemporalType(t, Type.STRING);
-            ctx.emitir("read", null, null, t);
-            return t;
+    private String tipoRetornoDe(Symbol objetivo) {
+        if (objetivo == null) {
+            return "int";
         }
-        ctx.emitir("print", args, null, null);
+        Type tipo = objetivo.getType();
+        if (tipo == null || tipo == Type.VOID) {
+            return null;
+        }
+        return Operandos.tipoRetornoC(tipo, objetivo.getTipoNombre());
+    }
+
+    private MemoryAccess traducirNativa(CodigoContexto ctx, String nombre, List<MemoryAccess> argumentos) {
+        if (nombre.equals("leer") || nombre.equals("readln")) {
+            MemoryAccess temp = Operandos.temporal(ctx, "int");
+            ctx.agregar(new Leer3D(temp, "%d", true));
+            return temp;
+        }
+        ctx.agregar(Impresion.print(ctx, argumentos));
         return null;
-    }
-
-    private void registrarCampo(IntermediateCodeGenerator gen, String t, String contenedor, String campo) {
-        IntermediateCodeGenerator.ValueInfo info = gen.describeValue(contenedor);
-        if (info == null || (info.type != Type.STRUCT && info.type != Type.CLASS)) {
-            return;
-        }
-        if (info.tipoNombre == null) {
-            return;
-        }
-        Symbol tipo = gen.resolveForTranslation(info.tipoNombre);
-        if (tipo == null || tipo.getMiembros() == null) {
-            return;
-        }
-        Symbol miembro = tipo.getMiembros().resolve(campo);
-        if (miembro == null) {
-            return;
-        }
-        gen.recordTemporal(t, miembro.getType(), miembro.isArray(),
-                miembro.getDimensiones(), miembro.getTipoNombre());
-    }
-
-    private void registrarElemento(IntermediateCodeGenerator gen, String t, String contenedor) {
-        IntermediateCodeGenerator.ValueInfo info = gen.describeValue(contenedor);
-        if (info == null) {
-            return;
-        }
-        int restantes = Math.max(0, info.dimensiones - 1);
-        gen.recordTemporal(t, info.type, restantes > 0, restantes, info.tipoNombre);
     }
     @Override
     public Type analizar(ContextoSemantico ctx) {
@@ -277,6 +198,8 @@ public class AccessNode implements Node {
                         return null;
                     }
                     Symbol miembro = tipoContenedor.getMiembros().resolve(s.nombreCampo);
+                    s.resuelto = miembro;
+                    s.claseObjetivo = tipoContenedor.getName();
                     if (miembro != null) {
                         actual = miembro;
                         metodoPendiente = null;
@@ -302,6 +225,7 @@ public class AccessNode implements Node {
                     elemento.setTipoNombre(actual.getTipoNombre());
                     elemento.setMiembros(actual.getMiembros());
                     elemento.setDimensiones(restantes);
+                    s.resuelto = elemento;
                     actual = elemento;
                     break;
                 }
@@ -319,6 +243,8 @@ public class AccessNode implements Node {
                                 "El método '" + metodoPendiente + "' no coincide con los argumentos dados");
                             return null;
                         }
+                        s.resuelto = metodo;
+                        s.claseObjetivo = contenedorPendiente.getName();
                         actual = metodo;
                         metodoPendiente = null;
                     } else {
@@ -329,6 +255,7 @@ public class AccessNode implements Node {
                                 "'" + nombre + "' no es una función conocida (¿falta un import?)");
                             return null;
                         }
+                        s.resuelto = objetivo;
                         if (objetivo.isNativa()) {
                             return objetivo.getType();
                         }

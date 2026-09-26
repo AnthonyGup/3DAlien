@@ -1,14 +1,20 @@
 package cunoc.compi2.alien_code.ast.expr;
 
-import cunoc.compi2.alien_code.ast.ASTVisitor;
+import cunoc.compi2.alien_code.ast.Expresion;
 import cunoc.compi2.alien_code.ast.Node;
 import cunoc.compi2.alien_code.ast.Type;
+import cunoc.compi2.alien_code.c3d.access.LabelAccess;
+import cunoc.compi2.alien_code.c3d.access.MemoryAccess;
+import cunoc.compi2.alien_code.c3d.cuartetas.Asignacion3D;
+import cunoc.compi2.alien_code.c3d.cuartetas.Condicional3D;
+import cunoc.compi2.alien_code.c3d.cuartetas.Etiqueta3D;
+import cunoc.compi2.alien_code.c3d.cuartetas.Goto3D;
 import cunoc.compi2.alien_code.ir.CodigoContexto;
-import cunoc.compi2.alien_code.ir.IntermediateCodeGenerator;
+import cunoc.compi2.alien_code.ir.Operandos;
 import cunoc.compi2.alien_code.semantic.ContextoSemantico;
 import cunoc.compi2.alien_code.semantic.TypeCompat;
 
-public class ConditionalNode implements Node {
+public class ConditionalNode extends Expresion {
     public Node condicion;
     public Node siVerdadero;
     public Node siFalso;
@@ -24,44 +30,26 @@ public class ConditionalNode implements Node {
     }
 
     @Override
-    public <T> T accept(ASTVisitor<T> visitor) {
-        return visitor.visitConditional(this);
-    }
-
-    @Override
     public int getLine() { return line; }
 
     @Override
     public int getColumn() { return column; }
 
     @Override
-    public String traducir(CodigoContexto ctx) {
-        IntermediateCodeGenerator gen = (IntermediateCodeGenerator) ctx;
-        String cond = condicion.traducir(ctx);
-        String t = ctx.nuevoTemporal();
-        String falso = ctx.nuevaEtiqueta();
-        ctx.emitir("if_false", cond, null, falso);
-        String v = siVerdadero.traducir(ctx);
-        ctx.emitir("=", v, null, t);
-        String end = ctx.nuevaEtiqueta();
-        ctx.emitir("goto", null, null, end);
-        ctx.emitir("label", null, null, falso);
-        String f = siFalso.traducir(ctx);
-        ctx.emitir("=", f, null, t);
-        ctx.emitir("label", null, null, end);
-        gen.recordTemporalType(t, tipoResultado(v, f, gen));
+    public MemoryAccess traducir(CodigoContexto ctx) {
+        MemoryAccess cond = ((Expresion) condicion).traducir(ctx);
+        LabelAccess etiquetaFalso = Operandos.etiqueta(ctx);
+        ctx.agregar(new Condicional3D(false, cond, etiquetaFalso));
+        MemoryAccess v = ((Expresion) siVerdadero).traducir(ctx);
+        MemoryAccess t = Operandos.temporal(ctx, Operandos.ctypeDe(ctx, v));
+        ctx.agregar(new Asignacion3D(t, v));
+        LabelAccess end = Operandos.etiqueta(ctx);
+        ctx.agregar(new Goto3D(end));
+        ctx.agregar(new Etiqueta3D(etiquetaFalso));
+        MemoryAccess f = ((Expresion) siFalso).traducir(ctx);
+        ctx.agregar(new Asignacion3D(t, f));
+        ctx.agregar(new Etiqueta3D(end));
         return t;
-    }
-
-    private Type tipoResultado(String v, String f, IntermediateCodeGenerator gen) {
-        IntermediateCodeGenerator.ValueInfo iv = gen.describeValue(v);
-        IntermediateCodeGenerator.ValueInfo iff = gen.describeValue(f);
-        Type tipoV = iv != null ? iv.type : null;
-        Type tipoF = iff != null ? iff.type : null;
-        if (TypeCompat.esNumerico(tipoV) && TypeCompat.esNumerico(tipoF)) {
-            return tipoV == Type.FLOAT || tipoF == Type.FLOAT ? Type.FLOAT : Type.INT;
-        }
-        return tipoV != null ? tipoV : tipoF;
     }
 
     @Override

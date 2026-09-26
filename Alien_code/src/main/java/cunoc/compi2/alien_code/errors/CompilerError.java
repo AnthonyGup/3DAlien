@@ -13,10 +13,6 @@ public class CompilerError {
         this.column = column;
     }
 
-    public ErrorType getType() {
-        return type;
-    }
-
     public String getMessage() {
         return message;
     }

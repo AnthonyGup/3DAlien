@@ -1,7 +1,7 @@
 package cunoc.compi2.alien_code.ast.decl;
 
-import cunoc.compi2.alien_code.ast.ASTVisitor;
 import cunoc.compi2.alien_code.ast.Node;
+import cunoc.compi2.alien_code.ast.Sentencia;
 import cunoc.compi2.alien_code.ast.Type;
 import cunoc.compi2.alien_code.ast.stmt.VariableDeclNode;
 import cunoc.compi2.alien_code.ir.CodigoContexto;
@@ -10,7 +10,7 @@ import cunoc.compi2.alien_code.semantic.Symbol;
 
 import java.util.List;
 
-public class StructDeclNode implements Node {
+public class StructDeclNode extends Sentencia {
     public String nombre;
     public List<VariableDeclNode> campos;
     private final int line;
@@ -24,20 +24,13 @@ public class StructDeclNode implements Node {
     }
 
     @Override
-    public <T> T accept(ASTVisitor<T> visitor) {
-        return visitor.visitStructDecl(this);
-    }
-
-    @Override
     public int getLine() { return line; }
 
     @Override
     public int getColumn() { return column; }
 
     @Override
-    public String traducir(CodigoContexto ctx) {
-        ctx.emitir("struct", nombre, String.valueOf(campos.size()), null);
-        return null;
+    public void traducir(CodigoContexto ctx) {
     }
 
     @Override

@@ -1,14 +1,17 @@
 package cunoc.compi2.alien_code.ast.stmt;
-import cunoc.compi2.alien_code.ast.Type;
-import cunoc.compi2.alien_code.semantic.ContextoSemantico;
-import cunoc.compi2.alien_code.ir.CodigoContexto;
-import cunoc.compi2.alien_code.ast.ASTVisitor;
-
+import cunoc.compi2.alien_code.ast.Expresion;
 import cunoc.compi2.alien_code.ast.Node;
+import cunoc.compi2.alien_code.ast.Sentencia;
+import cunoc.compi2.alien_code.ast.Type;
+import cunoc.compi2.alien_code.c3d.access.LabelAccess;
+import cunoc.compi2.alien_code.c3d.access.MemoryAccess;
+import cunoc.compi2.alien_code.c3d.cuartetas.Condicional3D;
+import cunoc.compi2.alien_code.c3d.cuartetas.Etiqueta3D;
 import cunoc.compi2.alien_code.ir.CodigoContexto;
-import cunoc.compi2.alien_code.ir.IntermediateCodeGenerator;
+import cunoc.compi2.alien_code.ir.Operandos;
+import cunoc.compi2.alien_code.semantic.ContextoSemantico;
 
-public class DoWhileNode implements Node {
+public class DoWhileNode extends Sentencia {
     public BlockNode cuerpo;
     public Node condicion;
     private final int line;
@@ -22,11 +25,6 @@ public class DoWhileNode implements Node {
     }
 
     @Override
-    public <T> T accept(ASTVisitor<T> visitor) {
-        return visitor.visitDoWhile(this);
-    }
-
-    @Override
     public int getLine() { return line; }
 
     @Override
@@ -34,22 +32,18 @@ public class DoWhileNode implements Node {
 
 
     @Override
-    public String traducir(CodigoContexto ctx) {
-        IntermediateCodeGenerator gen = (IntermediateCodeGenerator) ctx;
-        String start = ctx.nuevaEtiqueta();
-        String cont = ctx.nuevaEtiqueta();
-        String end = ctx.nuevaEtiqueta();
-        ctx.emitir("label", null, null, start);
-        ctx.empujarCiclo(cont, end);
-        gen.entrarAmbitoTraduccion();
+    public void traducir(CodigoContexto ctx) {
+        LabelAccess start = Operandos.etiqueta(ctx);
+        LabelAccess cont = Operandos.etiqueta(ctx);
+        LabelAccess end = Operandos.etiqueta(ctx);
+        ctx.agregar(new Etiqueta3D(start));
+        ctx.empujarCiclo(cont.getNombre(), end.getNombre());
         cuerpo.traducir(ctx);
-        gen.salirAmbitoTraduccion();
         ctx.popCiclo();
-        ctx.emitir("label", null, null, cont);
-        String cond = condicion.traducir(ctx);
-        ctx.emitir("if_true", cond, null, start);
-        ctx.emitir("label", null, null, end);
-        return null;
+        ctx.agregar(new Etiqueta3D(cont));
+        MemoryAccess cond = ((Expresion) condicion).traducir(ctx);
+        ctx.agregar(new Condicional3D(true, cond, start));
+        ctx.agregar(new Etiqueta3D(end));
     }
     @Override
     public Type analizar(ContextoSemantico ctx) {

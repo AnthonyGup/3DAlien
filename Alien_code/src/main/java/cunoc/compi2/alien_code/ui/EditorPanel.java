@@ -75,23 +75,11 @@ public class EditorPanel extends JPanel {
         return ProyectoTokenMakerFactory.LENGUAJE_YLANG;
     }
 
-    public RSyntaxTextArea getTextArea() {
-        return textArea;
-    }
-
     public File getArchivo() {
         return archivo;
     }
 
-    public void setArchivo(File archivo) {
-        this.archivo = archivo;
-    }
-
     public String getText() {
         return textArea.getText();
-    }
-
-    public void setText(String texto) {
-        textArea.setText(texto);
     }
 }

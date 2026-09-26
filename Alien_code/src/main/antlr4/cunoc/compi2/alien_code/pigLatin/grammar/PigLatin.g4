@@ -17,7 +17,7 @@ seccionVariables
     ;
 
 seccionPrincipal
-    : MAIOR_MARKER sentenciaPrincipal* PROGRAMA_FIN PUNTO_COMA
+    : MAIOR_MARKER sentenciaPrincipal* FINIS PUNTO_COMA
     ;
 
 sentenciaPrincipal
@@ -90,7 +90,7 @@ leer
     ;
 
 imprimir
-    : ESCRIBIR (ESCRIBIR? expresion)+ PUNTO_COMA
+    : ESCRIBIR (ESCRIBIR? expresion)+ PUNTO_COMA?
     ;
 
 ciclo
@@ -217,7 +217,7 @@ ESTO        : 'esto';
 SERIES      : 'series';
 NOVUS       : 'novus';
 FINIS       : 'finis';
-PROGRAMA_FIN : 'FINIS';
+
 SI          : 'si';
 ALITER      : 'aliter';
 DUM         : 'dum';

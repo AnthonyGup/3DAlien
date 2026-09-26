@@ -1,17 +1,19 @@
 package cunoc.compi2.alien_code.ast.expr;
-import cunoc.compi2.alien_code.ast.Type;
-import cunoc.compi2.alien_code.semantic.ContextoSemantico;
-import cunoc.compi2.alien_code.ir.CodigoContexto;
-import cunoc.compi2.alien_code.ast.ASTVisitor;
-
+import cunoc.compi2.alien_code.ast.Expresion;
 import cunoc.compi2.alien_code.ast.Node;
+import cunoc.compi2.alien_code.ast.Type;
+import cunoc.compi2.alien_code.c3d.access.Literal3D;
+import cunoc.compi2.alien_code.c3d.access.MemoryAccess;
+import cunoc.compi2.alien_code.ir.CodigoContexto;
+import cunoc.compi2.alien_code.ir.Operandos;
+import cunoc.compi2.alien_code.semantic.ContextoSemantico;
 import cunoc.compi2.alien_code.semantic.Symbol;
 import cunoc.compi2.alien_code.semantic.TypeCompat;
 
 import java.util.ArrayList;
 import java.util.List;
 
-public class StructLiteralNode implements Node {
+public class StructLiteralNode extends Expresion {
     public List<Node> valores;
     private final int line;
     private final int column;
@@ -23,11 +25,6 @@ public class StructLiteralNode implements Node {
     }
 
     @Override
-    public <T> T accept(ASTVisitor<T> visitor) {
-        return visitor.visitStructLiteral(this);
-    }
-
-    @Override
     public int getLine() { return line; }
 
     @Override
@@ -35,13 +32,13 @@ public class StructLiteralNode implements Node {
 
 
     @Override
-    public String traducir(CodigoContexto ctx) {
+    public MemoryAccess traducir(CodigoContexto ctx) {
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < valores.size(); i++) {
             if (i > 0) sb.append(", ");
-            sb.append(valores.get(i).traducir(ctx));
+            sb.append(Operandos.texto(((Expresion) valores.get(i)).traducir(ctx)));
         }
-        return "{" + sb + "}";
+        return new Literal3D("{" + sb + "}", Type.STRUCT);
     }
     @Override
     public Type analizar(ContextoSemantico ctx) {

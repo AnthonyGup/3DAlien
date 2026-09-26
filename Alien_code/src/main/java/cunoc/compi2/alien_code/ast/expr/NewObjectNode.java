@@ -1,20 +1,24 @@
 package cunoc.compi2.alien_code.ast.expr;
-import cunoc.compi2.alien_code.ast.Type;
-import cunoc.compi2.alien_code.semantic.ContextoSemantico;
-import cunoc.compi2.alien_code.ir.CodigoContexto;
-import cunoc.compi2.alien_code.ast.ASTVisitor;
-
+import cunoc.compi2.alien_code.ast.Expresion;
 import cunoc.compi2.alien_code.ast.Node;
+import cunoc.compi2.alien_code.ast.Type;
+import cunoc.compi2.alien_code.c3d.access.Literal3D;
+import cunoc.compi2.alien_code.c3d.access.MemoryAccess;
+import cunoc.compi2.alien_code.c3d.cuartetas.Asignacion3D;
+import cunoc.compi2.alien_code.c3d.cuartetas.Llamada3D;
 import cunoc.compi2.alien_code.ir.CodigoContexto;
 import cunoc.compi2.alien_code.ir.IntermediateCodeGenerator;
+import cunoc.compi2.alien_code.ir.Operandos;
 import cunoc.compi2.alien_code.semantic.ContextoSemantico;
 import cunoc.compi2.alien_code.semantic.Symbol;
 
+import java.util.ArrayList;
 import java.util.List;
 
-public class NewObjectNode implements Node {
+public class NewObjectNode extends Expresion {
     public String nombreClase;
     public List<Node> argumentos;
+    private Symbol claseResuelta;
     private final int line;
     private final int column;
 
@@ -26,11 +30,6 @@ public class NewObjectNode implements Node {
     }
 
     @Override
-    public <T> T accept(ASTVisitor<T> visitor) {
-        return visitor.visitNewObject(this);
-    }
-
-    @Override
     public int getLine() { return line; }
 
     @Override
@@ -38,30 +37,22 @@ public class NewObjectNode implements Node {
 
 
     @Override
-    public String traducir(CodigoContexto ctx) {
+    public MemoryAccess traducir(CodigoContexto ctx) {
         IntermediateCodeGenerator gen = (IntermediateCodeGenerator) ctx;
-        String t = ctx.nuevoTemporal();
-        gen.recordTemporal(t, Type.CLASS, false, 0, nombreClase);
-        ctx.emitir("call", "malloc", "sizeof(struct " + nombreClase + ")", t);
+        MemoryAccess t = Operandos.temporal(ctx, "struct " + nombreClase + " *");
+        ctx.agregar(new Asignacion3D(t, new Literal3D("malloc(sizeof(struct " + nombreClase + "))", Type.CLASS)));
 
-        StringBuilder args = new StringBuilder(t);
+        List<MemoryAccess> argumentosTraducidos = new ArrayList<>();
+        argumentosTraducidos.add(t);
         for (Node a : argumentos) {
-            args.append(", ").append(a.traducir(ctx));
+            argumentosTraducidos.add(((Expresion) a).traducir(ctx));
         }
 
-        int overloadIndex = resolveConstructorOverloadIndex(gen);
-        String discard = ctx.nuevoTemporal();
-        gen.recordTemporalType(discard, Type.VOID);
-        ctx.emitir("call", nombreClase + "_init_" + overloadIndex, args.toString(), discard);
+        int overloadIndex = claseResuelta != null
+                ? gen.overloadIndexByArgCount(claseResuelta.getFirmasConstructores(), argumentos.size())
+                : 0;
+        ctx.agregar(new Llamada3D(nombreClase + "_init_" + overloadIndex, argumentosTraducidos, null));
         return t;
-    }
-
-    private int resolveConstructorOverloadIndex(IntermediateCodeGenerator gen) {
-        Symbol clase = gen.resolveForTranslation(nombreClase);
-        if (clase == null) {
-            return 0;
-        }
-        return gen.overloadIndexByArgCount(clase.getFirmasConstructores(), argumentos.size());
     }
     @Override
     public Type analizar(ContextoSemantico ctx) {
@@ -72,6 +63,7 @@ public class NewObjectNode implements Node {
             for (Node a : argumentos) ctx.evaluar(a);
             return null;
         }
+        claseResuelta = clase;
         List<Type> tiposArgs = AccessNode.tiposDeArgumentos(ctx, argumentos);
 
         if (!clase.tieneConstructorCompatible(tiposArgs)) {

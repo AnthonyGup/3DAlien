@@ -41,7 +41,6 @@ public class Symbol {
     public Type getType() { return type; }
     public Kind getKind() { return kind; }
     public boolean isArray() { return isArray; }
-    public boolean isParameter() { return isParameter; }
     public boolean isField() { return isField; }
     public int getSize() { return size; }
 
@@ -51,7 +50,6 @@ public class Symbol {
     public int getLinea() { return linea; }
     public void setLinea(int linea) { this.linea = linea; }
 
-    public int getColumna() { return columna; }
     public void setColumna(int columna) { this.columna = columna; }
 
     public int getDimensiones() { return dimensiones; }

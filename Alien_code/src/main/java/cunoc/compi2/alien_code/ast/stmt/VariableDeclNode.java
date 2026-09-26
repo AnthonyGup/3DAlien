@@ -1,19 +1,21 @@
 package cunoc.compi2.alien_code.ast.stmt;
-import cunoc.compi2.alien_code.semantic.ContextoSemantico;
-import cunoc.compi2.alien_code.ir.CodigoContexto;
-import cunoc.compi2.alien_code.ast.ASTVisitor;
-
+import cunoc.compi2.alien_code.ast.Expresion;
 import cunoc.compi2.alien_code.ast.Node;
+import cunoc.compi2.alien_code.ast.Sentencia;
 import cunoc.compi2.alien_code.ast.Type;
+import cunoc.compi2.alien_code.c3d.access.Literal3D;
+import cunoc.compi2.alien_code.c3d.access.MemoryAccess;
+import cunoc.compi2.alien_code.c3d.cuartetas.Asignacion3D;
+import cunoc.compi2.alien_code.ir.CodigoContexto;
+import cunoc.compi2.alien_code.ir.Operandos;
+import cunoc.compi2.alien_code.semantic.ContextoSemantico;
 import cunoc.compi2.alien_code.ast.expr.AccessNode;
 import cunoc.compi2.alien_code.ast.expr.NewArrayNode;
 import cunoc.compi2.alien_code.ast.expr.StructLiteralNode;
-import cunoc.compi2.alien_code.ir.CodigoContexto;
-import cunoc.compi2.alien_code.ir.IntermediateCodeGenerator;
 import cunoc.compi2.alien_code.semantic.Symbol;
 import cunoc.compi2.alien_code.semantic.TypeCompat;
 
-public class VariableDeclNode implements Node {
+public class VariableDeclNode extends Sentencia {
     public String nombre;
     public Type tipo;
     public String tipoNombre;
@@ -33,11 +35,6 @@ public class VariableDeclNode implements Node {
     }
 
     @Override
-    public <T> T accept(ASTVisitor<T> visitor) {
-        return visitor.visitVariableDecl(this);
-    }
-
-    @Override
     public int getLine() { return line; }
 
     @Override
@@ -45,18 +42,16 @@ public class VariableDeclNode implements Node {
 
 
     @Override
-    public String traducir(CodigoContexto ctx) {
-        IntermediateCodeGenerator gen = (IntermediateCodeGenerator) ctx;
-        if (gen.enAmbitoTraduccion()) {
-            gen.definirEnTraduccion(Symbol.variable(nombre, tipo, tipoElemento, tipoNombre,
-                    dimensiones, false, false, getLine(), getColumn()));
-        }
+    public void traducir(CodigoContexto ctx) {
         if (inicial == null) {
-            return null;
+            return;
         }
-        String value = inicial.traducir(ctx);
-        ctx.emitir("=", value, null, nombre);
-        return null;
+        MemoryAccess value = ((Expresion) inicial).traducir(ctx);
+        MemoryAccess target = Operandos.nombre(ctx, nombre, ctx.resolverSimbolo(nombre));
+        if (value instanceof Literal3D literal) {
+            value = Operandos.literalBraces(target, literal);
+        }
+        ctx.agregar(new Asignacion3D(target, value));
     }
     @Override
     public Type analizar(ContextoSemantico ctx) {

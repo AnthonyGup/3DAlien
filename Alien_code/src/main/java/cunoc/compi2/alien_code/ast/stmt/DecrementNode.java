@@ -1,14 +1,15 @@
 package cunoc.compi2.alien_code.ast.stmt;
+import cunoc.compi2.alien_code.ast.Sentencia;
 import cunoc.compi2.alien_code.ast.Type;
-import cunoc.compi2.alien_code.semantic.ContextoSemantico;
+import cunoc.compi2.alien_code.c3d.access.Literal3D;
+import cunoc.compi2.alien_code.c3d.access.MemoryAccess;
+import cunoc.compi2.alien_code.c3d.cuartetas.Operacion3D;
 import cunoc.compi2.alien_code.ir.CodigoContexto;
-import cunoc.compi2.alien_code.ast.ASTVisitor;
-
-import cunoc.compi2.alien_code.ast.Node;
 import cunoc.compi2.alien_code.ast.expr.AccessNode;
+import cunoc.compi2.alien_code.semantic.ContextoSemantico;
 import cunoc.compi2.alien_code.semantic.TypeCompat;
 
-public class DecrementNode implements Node {
+public class DecrementNode extends Sentencia {
     public AccessNode objetivo;
     private final int line;
     private final int column;
@@ -20,11 +21,6 @@ public class DecrementNode implements Node {
     }
 
     @Override
-    public <T> T accept(ASTVisitor<T> visitor) {
-        return visitor.visitDecrement(this);
-    }
-
-    @Override
     public int getLine() { return line; }
 
     @Override
@@ -32,10 +28,9 @@ public class DecrementNode implements Node {
 
 
     @Override
-    public String traducir(CodigoContexto ctx) {
-        String lvalue = objetivo.toLvalue(ctx);
-        ctx.emitir("-", lvalue, "1", lvalue);
-        return null;
+    public void traducir(CodigoContexto ctx) {
+        MemoryAccess lvalue = objetivo.toLvalue(ctx);
+        ctx.agregar(new Operacion3D("-", lvalue, new Literal3D("1", Type.INT), lvalue));
     }
     @Override
     public Type analizar(ContextoSemantico ctx) {

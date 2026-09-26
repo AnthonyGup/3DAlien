@@ -1,15 +1,14 @@
 package cunoc.compi2.alien_code.ast.stmt;
+import cunoc.compi2.alien_code.ast.Sentencia;
 import cunoc.compi2.alien_code.ast.Type;
-import cunoc.compi2.alien_code.semantic.ContextoSemantico;
+import cunoc.compi2.alien_code.c3d.access.MemoryAccess;
+import cunoc.compi2.alien_code.c3d.cuartetas.Leer3D;
 import cunoc.compi2.alien_code.ir.CodigoContexto;
-import cunoc.compi2.alien_code.ir.IntermediateCodeGenerator;
-import cunoc.compi2.alien_code.ast.ASTVisitor;
-
-import cunoc.compi2.alien_code.ast.Node;
 import cunoc.compi2.alien_code.ast.expr.AccessNode;
+import cunoc.compi2.alien_code.semantic.ContextoSemantico;
 import cunoc.compi2.alien_code.semantic.TypeCompat;
 
-public class ReadNode implements Node {
+public class ReadNode extends Sentencia {
     public AccessNode destino;
     private final int line;
     private final int column;
@@ -21,11 +20,6 @@ public class ReadNode implements Node {
     }
 
     @Override
-    public <T> T accept(ASTVisitor<T> visitor) {
-        return visitor.visitRead(this);
-    }
-
-    @Override
     public int getLine() { return line; }
 
     @Override
@@ -33,16 +27,21 @@ public class ReadNode implements Node {
 
 
     @Override
-    public String traducir(CodigoContexto ctx) {
-        if (destino != null) {
-            IntermediateCodeGenerator gen = (IntermediateCodeGenerator) ctx;
-            String t = ctx.nuevoTemporal();
-            gen.recordTemporalType(t, Type.STRING);
-            ctx.emitir("read", null, null, t);
-            String target = destino.toLvalue(ctx);
-            ctx.emitir("=", t, null, target);
+    public void traducir(CodigoContexto ctx) {
+        if (destino == null) {
+            return;
         }
-        return null;
+        MemoryAccess target = destino.toLvalue(ctx);
+        Type tipo = target.getTipo();
+        if (tipo == Type.STRING) {
+            ctx.agregar(new Leer3D(target, "%s", false));
+        } else if (tipo == Type.CHAR) {
+            ctx.agregar(new Leer3D(target, " %c", true));
+        } else if (tipo == Type.FLOAT) {
+            ctx.agregar(new Leer3D(target, "%lf", true));
+        } else {
+            ctx.agregar(new Leer3D(target, "%d", true));
+        }
     }
     @Override
     public Type analizar(ContextoSemantico ctx) {

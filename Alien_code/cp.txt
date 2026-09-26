@@ -1,0 +1,1 @@
+C:\Users\Anthony\.m2\repository\org\antlr\antlr4-runtime\4.13.1\antlr4-runtime-4.13.1.jar;C:\Users\Anthony\.m2\repository\com\fifesoft\rsyntaxtextarea\3.3.4\rsyntaxtextarea-3.3.4.jar

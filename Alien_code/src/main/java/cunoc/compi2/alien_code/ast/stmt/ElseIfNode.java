@@ -1,14 +1,17 @@
 package cunoc.compi2.alien_code.ast.stmt;
-import cunoc.compi2.alien_code.ast.Type;
-import cunoc.compi2.alien_code.semantic.ContextoSemantico;
-import cunoc.compi2.alien_code.ir.CodigoContexto;
-import cunoc.compi2.alien_code.ast.ASTVisitor;
-
+import cunoc.compi2.alien_code.ast.Expresion;
 import cunoc.compi2.alien_code.ast.Node;
+import cunoc.compi2.alien_code.ast.Sentencia;
+import cunoc.compi2.alien_code.ast.Type;
+import cunoc.compi2.alien_code.c3d.access.LabelAccess;
+import cunoc.compi2.alien_code.c3d.access.MemoryAccess;
+import cunoc.compi2.alien_code.c3d.cuartetas.Condicional3D;
+import cunoc.compi2.alien_code.c3d.cuartetas.Etiqueta3D;
 import cunoc.compi2.alien_code.ir.CodigoContexto;
-import cunoc.compi2.alien_code.ir.IntermediateCodeGenerator;
+import cunoc.compi2.alien_code.ir.Operandos;
+import cunoc.compi2.alien_code.semantic.ContextoSemantico;
 
-public class ElseIfNode implements Node {
+public class ElseIfNode extends Sentencia {
     public Node condicion;
     public BlockNode cuerpo;
     private final int line;
@@ -26,11 +29,6 @@ public class ElseIfNode implements Node {
     }
 
     @Override
-    public <T> T accept(ASTVisitor<T> visitor) {
-        return visitor.visitElseIf(this);
-    }
-
-    @Override
     public int getLine() { return line; }
 
     @Override
@@ -38,26 +36,20 @@ public class ElseIfNode implements Node {
 
 
     @Override
-    public String traducir(CodigoContexto ctx) {
-        IntermediateCodeGenerator gen = (IntermediateCodeGenerator) ctx;
+    public void traducir(CodigoContexto ctx) {
         if (esElse()) {
-            gen.entrarAmbitoTraduccion();
             if (cuerpo != null) {
                 cuerpo.traducir(ctx);
             }
-            gen.salirAmbitoTraduccion();
-            return null;
+            return;
         }
-        String cond = condicion.traducir(ctx);
-        String next = ctx.nuevaEtiqueta();
-        ctx.emitir("if_false", cond, null, next);
-        gen.entrarAmbitoTraduccion();
+        MemoryAccess cond = ((Expresion) condicion).traducir(ctx);
+        LabelAccess next = Operandos.etiqueta(ctx);
+        ctx.agregar(new Condicional3D(false, cond, next));
         if (cuerpo != null) {
             cuerpo.traducir(ctx);
         }
-        gen.salirAmbitoTraduccion();
-        ctx.emitir("label", null, null, next);
-        return null;
+        ctx.agregar(new Etiqueta3D(next));
     }
     @Override
     public Type analizar(ContextoSemantico ctx) {

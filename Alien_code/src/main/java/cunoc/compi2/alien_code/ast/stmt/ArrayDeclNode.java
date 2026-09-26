@@ -1,21 +1,27 @@
 package cunoc.compi2.alien_code.ast.stmt;
-import cunoc.compi2.alien_code.semantic.ContextoSemantico;
-import cunoc.compi2.alien_code.ir.CodigoContexto;
-import cunoc.compi2.alien_code.ast.ASTVisitor;
-
+import cunoc.compi2.alien_code.ast.Expresion;
 import cunoc.compi2.alien_code.ast.Node;
+import cunoc.compi2.alien_code.ast.Sentencia;
 import cunoc.compi2.alien_code.ast.Type;
+import cunoc.compi2.alien_code.c3d.access.IndiceAccess;
+import cunoc.compi2.alien_code.c3d.access.Literal3D;
+import cunoc.compi2.alien_code.c3d.access.MemoryAccess;
+import cunoc.compi2.alien_code.c3d.access.NameAccess;
+import cunoc.compi2.alien_code.c3d.cuartetas.Asignacion3D;
+import cunoc.compi2.alien_code.c3d.cuartetas.DeclararArreglo3D;
 import cunoc.compi2.alien_code.ir.CodigoContexto;
-import cunoc.compi2.alien_code.ir.IntermediateCodeGenerator;
+import cunoc.compi2.alien_code.ir.Operandos;
+import cunoc.compi2.alien_code.semantic.ContextoSemantico;
 import cunoc.compi2.alien_code.semantic.Symbol;
 import cunoc.compi2.alien_code.semantic.TypeCompat;
 
 import java.util.List;
 
-public class ArrayDeclNode implements Node {
+public class ArrayDeclNode extends Sentencia {
     public String nombre;
     public int tamano;
     public int dimensiones = 1;
+    public String dims;
     public Type tipo;
     public String tipoNombre;
     public List<Node> iniciales;
@@ -33,11 +39,6 @@ public class ArrayDeclNode implements Node {
     }
 
     @Override
-    public <T> T accept(ASTVisitor<T> visitor) {
-        return visitor.visitArrayDecl(this);
-    }
-
-    @Override
     public int getLine() { return line; }
 
     @Override
@@ -45,26 +46,23 @@ public class ArrayDeclNode implements Node {
 
 
     @Override
-    public String traducir(CodigoContexto ctx) {
-        IntermediateCodeGenerator gen = (IntermediateCodeGenerator) ctx;
-        if (gen.enAmbitoTraduccion()) {
-            Symbol simbolo = new Symbol(nombre, tipo, Symbol.Kind.VARIABLE, true, false, false, tamano);
-            simbolo.setDimensiones(dimensiones);
-            simbolo.setLinea(getLine());
-            simbolo.setColumna(getColumn());
-            if (tipo == Type.STRUCT || tipo == Type.CLASS) {
-                simbolo.setTipoNombre(tipoNombre);
-            }
-            gen.definirEnTraduccion(simbolo);
-        }
-        ctx.emitir("array", nombre, String.valueOf(tamano), null);
+    public void traducir(CodigoContexto ctx) {
+        String dimsTexto = dims != null ? dims : String.valueOf(tamano);
+        String tipoTexto = (tipo == Type.STRUCT || tipo == Type.CLASS) && tipoNombre != null
+                ? tipoNombre : tipo.name();
+        ctx.agregar(new DeclararArreglo3D(nombre, tipoTexto, dimsTexto));
         if (iniciales != null) {
+            MemoryAccess base = new NameAccess(nombre, tipo, tipoNombre, false, dimensiones);
             for (int i = 0; i < iniciales.size(); i++) {
-                String val = iniciales.get(i).traducir(ctx);
-                ctx.emitir("[]=", String.valueOf(i), val, nombre);
+                MemoryAccess val = ((Expresion) iniciales.get(i)).traducir(ctx);
+                if (val instanceof Literal3D literal) {
+                    val = Operandos.literalBraces(base, literal);
+                }
+                MemoryAccess indice = new IndiceAccess(base, new Literal3D(String.valueOf(i), Type.INT),
+                        tipo, tipoNombre, Math.max(0, dimensiones - 1));
+                ctx.agregar(new Asignacion3D(indice, val));
             }
         }
-        return null;
     }
     @Override
     public Type analizar(ContextoSemantico ctx) {

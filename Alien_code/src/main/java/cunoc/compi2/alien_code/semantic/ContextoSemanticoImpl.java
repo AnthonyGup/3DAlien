@@ -21,10 +21,6 @@ public class ContextoSemanticoImpl implements ContextoSemantico {
         this.errorListener = errorListener;
     }
 
-    public SymbolTable getSymbolTable() {
-        return symbolTable;
-    }
-
     @Override
     public Type evaluar(Node nodo) {
         return nodo.analizar(this);

@@ -1,17 +1,19 @@
 package cunoc.compi2.alien_code.ast.decl;
 
-import cunoc.compi2.alien_code.ast.ASTVisitor;
 import cunoc.compi2.alien_code.ast.Node;
+import cunoc.compi2.alien_code.ast.Sentencia;
 import cunoc.compi2.alien_code.ast.Type;
 import cunoc.compi2.alien_code.ast.stmt.BlockNode;
+import cunoc.compi2.alien_code.c3d.cuartetas.FinFuncion3D;
+import cunoc.compi2.alien_code.c3d.cuartetas.InicioFuncion3D;
 import cunoc.compi2.alien_code.ir.CodigoContexto;
 import cunoc.compi2.alien_code.ir.IntermediateCodeGenerator;
+import cunoc.compi2.alien_code.ir.Operandos;
 import cunoc.compi2.alien_code.semantic.ContextoSemantico;
-import cunoc.compi2.alien_code.semantic.Symbol;
 
 import java.util.List;
 
-public class MethodDeclNode implements Node {
+public class MethodDeclNode extends Sentencia {
     public String nombre;
     public List<ParameterNode> parametros;
     public Type tipoRetorno;
@@ -31,31 +33,22 @@ public class MethodDeclNode implements Node {
     }
 
     @Override
-    public <T> T accept(ASTVisitor<T> visitor) {
-        return visitor.visitMethodDecl(this);
-    }
-
-    @Override
     public int getLine() { return line; }
 
     @Override
     public int getColumn() { return column; }
 
     @Override
-    public String traducir(CodigoContexto ctx) {
+    public void traducir(CodigoContexto ctx) {
         IntermediateCodeGenerator gen = (IntermediateCodeGenerator) ctx;
         int idx = gen.nextMethodIndex(nombre);
-        ctx.emitir("func", gen.currentClassName() + "_" + nombre + "_" + idx,
-                String.valueOf(parametros.size()), null);
-        gen.entrarAmbitoTraduccion(gen.currentClassMembers());
-        for (ParameterNode p : parametros) {
-            gen.definirEnTraduccion(Symbol.variable(p.nombre, p.tipo, p.tipoElemento, p.tipoNombre,
-                    p.dimensiones, true, false, p.getLine(), p.getColumn()));
-        }
+        String nombreCompuesto = gen.currentClassName() + "_" + nombre + "_" + idx;
+        String firma = "self:" + gen.currentClassName()
+                + (parametros.isEmpty() ? "" : "; " + ParameterNode.descriptores(parametros));
+        String ret = Operandos.tipoRetornoC(tipoRetorno, tipoRetornoNombre);
+        ctx.agregar(new InicioFuncion3D(nombreCompuesto, firma, gen.currentClassName(), ret));
         cuerpo.traducir(ctx);
-        gen.salirAmbitoTraduccion();
-        ctx.emitir("func_end", gen.currentClassName() + "_" + nombre + "_" + idx, null, null);
-        return null;
+        ctx.agregar(new FinFuncion3D(nombreCompuesto));
     }
 
     @Override

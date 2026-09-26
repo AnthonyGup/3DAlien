@@ -1,13 +1,15 @@
 package cunoc.compi2.alien_code.ast.stmt;
 
-import cunoc.compi2.alien_code.ast.ASTVisitor;
+import cunoc.compi2.alien_code.ast.Expresion;
 import cunoc.compi2.alien_code.ast.Node;
+import cunoc.compi2.alien_code.ast.Sentencia;
 import cunoc.compi2.alien_code.ast.Type;
+import cunoc.compi2.alien_code.c3d.cuartetas.Retornar3D;
 import cunoc.compi2.alien_code.ir.CodigoContexto;
 import cunoc.compi2.alien_code.semantic.ContextoSemantico;
 import cunoc.compi2.alien_code.semantic.TypeCompat;
 
-public class ReturnNode implements Node {
+public class ReturnNode extends Sentencia {
     public Node expresion;
     private final int line;
     private final int column;
@@ -19,25 +21,18 @@ public class ReturnNode implements Node {
     }
 
     @Override
-    public <T> T accept(ASTVisitor<T> visitor) {
-        return visitor.visitReturn(this);
-    }
-
-    @Override
     public int getLine() { return line; }
 
     @Override
     public int getColumn() { return column; }
 
     @Override
-    public String traducir(CodigoContexto ctx) {
+    public void traducir(CodigoContexto ctx) {
         if (expresion != null) {
-            String value = expresion.traducir(ctx);
-            ctx.emitir("return", value, null, null);
+            ctx.agregar(new Retornar3D(((Expresion) expresion).traducir(ctx)));
         } else {
-            ctx.emitir("return", null, null, null);
+            ctx.agregar(new Retornar3D(null));
         }
-        return null;
     }
 
     @Override

@@ -1,15 +1,15 @@
 package cunoc.compi2.alien_code.ast.expr;
-import cunoc.compi2.alien_code.ast.Type;
-import cunoc.compi2.alien_code.semantic.ContextoSemantico;
-import cunoc.compi2.alien_code.ir.CodigoContexto;
-import cunoc.compi2.alien_code.ast.ASTVisitor;
-
+import cunoc.compi2.alien_code.ast.Expresion;
 import cunoc.compi2.alien_code.ast.Node;
+import cunoc.compi2.alien_code.ast.Type;
+import cunoc.compi2.alien_code.c3d.access.MemoryAccess;
+import cunoc.compi2.alien_code.c3d.cuartetas.Operacion3D;
 import cunoc.compi2.alien_code.ir.CodigoContexto;
-import cunoc.compi2.alien_code.ir.IntermediateCodeGenerator;
+import cunoc.compi2.alien_code.ir.Operandos;
+import cunoc.compi2.alien_code.semantic.ContextoSemantico;
 import cunoc.compi2.alien_code.semantic.TypeCompat;
 
-public class UnaryOpNode implements Node {
+public class UnaryOpNode extends Expresion {
     public String operador;
     public Node operando;
     private final int line;
@@ -23,11 +23,6 @@ public class UnaryOpNode implements Node {
     }
 
     @Override
-    public <T> T accept(ASTVisitor<T> visitor) {
-        return visitor.visitUnaryOp(this);
-    }
-
-    @Override
     public int getLine() { return line; }
 
     @Override
@@ -35,19 +30,13 @@ public class UnaryOpNode implements Node {
 
 
     @Override
-    public String traducir(CodigoContexto ctx) {
-        String opd = operando.traducir(ctx);
-        String t = ctx.nuevoTemporal();
-        IntermediateCodeGenerator gen = (IntermediateCodeGenerator) ctx;
-        Type tipo = operador.equals("-") ? tipoOperando(opd, gen) : Type.BOOL;
-        gen.recordTemporalType(t, tipo);
-        ctx.emitir(operador.equals("non") ? "!" : operador, opd, null, t);
+    public MemoryAccess traducir(CodigoContexto ctx) {
+        MemoryAccess opd = ((Expresion) operando).traducir(ctx);
+        String op = operador.equals("non") ? "!" : operador;
+        String ctype = operador.equals("-") ? Operandos.ctypeDe(ctx, opd) : "int";
+        MemoryAccess t = Operandos.temporal(ctx, ctype);
+        ctx.agregar(new Operacion3D(op, opd, null, t));
         return t;
-    }
-
-    private Type tipoOperando(String opd, IntermediateCodeGenerator gen) {
-        IntermediateCodeGenerator.ValueInfo info = gen.describeValue(opd);
-        return info != null ? info.type : null;
     }
     @Override
     public Type analizar(ContextoSemantico ctx) {

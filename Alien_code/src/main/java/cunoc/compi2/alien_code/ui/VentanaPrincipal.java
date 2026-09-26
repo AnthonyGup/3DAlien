@@ -14,8 +14,10 @@ import cunoc.compi2.alien_code.ast.Node;
 import cunoc.compi2.alien_code.ast.decl.ClassDeclNode;
 import cunoc.compi2.alien_code.ast.program.ImportNode;
 import cunoc.compi2.alien_code.ast.program.ProgramNode;
+import cunoc.compi2.alien_code.c3d.cuartetas.Cuarteta;
+import cunoc.compi2.alien_code.c3d.access.MemoryAccess;
+import cunoc.compi2.alien_code.codegen.CCodeGenerator;
 import cunoc.compi2.alien_code.errors.ErrorListener;
-import cunoc.compi2.alien_code.ir.Cuarteta;
 import cunoc.compi2.alien_code.ir.IntermediateCodeGenerator;
 import cunoc.compi2.alien_code.pigLatin.astbuilder.PigLatinASTBuilder;
 import cunoc.compi2.alien_code.ylang.astbuilder.YLangASTBuilder;
@@ -23,8 +25,6 @@ import cunoc.compi2.alien_code.zetariano.astbuilder.ZetarianoASTBuilder;
 import cunoc.compi2.alien_code.semantic.SemanticAnalyzer;
 import cunoc.compi2.alien_code.semantic.Symbol;
 import cunoc.compi2.alien_code.semantic.SymbolTable;
-import cunoc.compi2.alien_code.ylang.astbuilder.YLangASTBuilder;
-import cunoc.compi2.alien_code.zetariano.astbuilder.ZetarianoASTBuilder;
 
 public class VentanaPrincipal extends JFrame {
 
@@ -40,6 +40,7 @@ public class VentanaPrincipal extends JFrame {
     private final VentanaReporte ventanaCuartetas;
     private final VentanaReporte ventanaC3D;
     private File carpetaProyecto;
+    private String codigoCActual;
 
     public VentanaPrincipal() {
         super("3DAlien - Compilador de Y?, Zetariano y Pig Latin");
@@ -75,6 +76,7 @@ public class VentanaPrincipal extends JFrame {
         menuBar.setOnDescargarProyecto(e -> descargarProyecto());
         menuBar.setOnSalir(e -> dispose());
         menuBar.setOnCompilar(e -> compilar(log));
+        menuBar.setOnCompilarMain(e -> compilarMainPig(log));
         menuBar.setOnLimpiarLog(e -> log.limpiar());
         menuBar.setOnVerErrores(e -> ventanaErrores.setVisible(true));
         menuBar.setOnVerSimbolos(e -> ventanaSimbolos.setVisible(true));
@@ -190,7 +192,7 @@ public class VentanaPrincipal extends JFrame {
 
         EditorPanel editor = mainPanel.getEditorTabs().getEditorSeleccionado();
         if (editor == null) {
-            log.agregarError("No hay ninguna pesta\u00f1a abierta.");
+            log.agregarError("No hay ninguna pestaña abierta.");
             return;
         }
 
@@ -202,31 +204,98 @@ public class VentanaPrincipal extends JFrame {
         log.agregarInfo("> Compilando " + nombreArchivo + (resultado.extensionValida ? " (" + resultado.lenguaje + ")" : ""));
 
         if (!resultado.extensionValida) {
-            log.agregarError("Extensi\u00f3n no reconocida. Usa .y, .z o .pig.");
+            log.agregarError("Extensión no reconocida. Usa .y, .z o .pig.");
             return;
         }
 
-        log.agregarInfo("> An\u00e1lisis l\u00e9xico: " + resultado.cantidadTokens + " tokens encontrados.");
-        log.agregarInfo("> An\u00e1lisis sint\u00e1ctico...");
+        log.agregarInfo("> Análisis léxico: " + resultado.cantidadTokens + " tokens encontrados.");
+        log.agregarInfo("> Análisis sintáctico...");
 
         if (resultado.hayErrores()) {
             List<Object[]> filas = new ArrayList<>();
             for (VerificadorSintactico.ErrorSintactico error : resultado.errores) {
-                filas.add(new Object[]{"Sint\u00e1ctico", error.mensaje, error.linea, error.columna});
+                filas.add(new Object[]{"Sintáctico", error.mensaje, error.linea, error.columna});
+                log.agregarError("[Sintáctico] "
+                    + (error.linea > 0 ? "Línea " + error.linea + ", Columna " + error.columna + ": " : "")
+                    + error.mensaje);
             }
             ventanaErrores.setDatos(filas);
             log.agregarError("Se detectaron " + resultado.errores.size()
-                + " error(es) sint\u00e1cticos. Ver Reportes > Ver errores.");
+                + " error(es) sintácticos. Ver Reportes > Ver errores.");
             return;
         }
 
-        log.agregarExito("Sin errores sint\u00e1cticos.");
+        log.agregarExito("Sin errores sintácticos.");
         String extension = extensionDe(archivo);
         if (archivo != null && (extension.equals("pig") || extension.equals("y") || extension.equals("z"))) {
             ejecutarPipelineSemantico(archivo, log, ventanaErrores);
         } else {
             log.agregarPendiente("> C3D y C: pendiente (P8/P9).");
         }
+    }
+
+    private void compilarMainPig(PanelLog log) {
+        log.limpiar();
+        ventanaErrores.limpiar();
+        ventanaSimbolos.limpiar();
+
+        if (carpetaProyecto == null) {
+            log.agregarError("No hay proyecto abierto. Abre una carpeta de proyecto primero.");
+            return;
+        }
+
+        File mainPig = buscarMainPig(carpetaProyecto);
+        if (mainPig == null) {
+            log.agregarError("No se encontró ningún archivo .pig con sección principal (MAIOR>).");
+            return;
+        }
+
+        log.agregarInfo("> Compilando main: " + mainPig.getName());
+        VerificadorSintactico verificador = new VerificadorSintactico();
+        VerificadorSintactico.Resultado resultado = verificador.verificar(leer(mainPig), mainPig);
+
+        if (!resultado.extensionValida) {
+            log.agregarError("Extensión no reconocida.");
+            return;
+        }
+
+        log.agregarInfo("> Análisis léxico: " + resultado.cantidadTokens + " tokens encontrados.");
+        log.agregarInfo("> Análisis sintáctico...");
+
+        if (resultado.hayErrores()) {
+            List<Object[]> filas = new ArrayList<>();
+            for (VerificadorSintactico.ErrorSintactico error : resultado.errores) {
+                filas.add(new Object[]{"Sintáctico", error.mensaje, error.linea, error.columna});
+                log.agregarError("[Sintáctico] "
+                    + (error.linea > 0 ? "Línea " + error.linea + ", Columna " + error.columna + ": " : "")
+                    + error.mensaje);
+            }
+            ventanaErrores.setDatos(filas);
+            log.agregarError("Se detectaron " + resultado.errores.size()
+                + " error(es) sintácticos. Ver Reportes > Ver errores.");
+            return;
+        }
+
+        log.agregarExito("Sin errores sintácticos.");
+        ejecutarPipelineSemantico(mainPig, log, ventanaErrores);
+    }
+
+    private File buscarMainPig(File directorio) {
+        File[] archivos = directorio.listFiles();
+        if (archivos == null) return null;
+
+        for (File archivo : archivos) {
+            if (archivo.isDirectory()) {
+                File encontrado = buscarMainPig(archivo);
+                if (encontrado != null) return encontrado;
+            } else if (archivo.getName().toLowerCase().endsWith(".pig")) {
+                String contenido = leer(archivo);
+                if (contenido != null && contenido.contains("MAIOR>")) {
+                    return archivo;
+                }
+            }
+        }
+        return null;
     }
 
     private void ejecutarPipelineSemantico(File archivo, PanelLog log, VentanaReporte ventanaErrores) {
@@ -245,7 +314,7 @@ public class VentanaPrincipal extends JFrame {
             String esperado = archivo.getName().replaceFirst("(?i)\\.z$", "");
             String clase = nombreClasePrincipal(programa);
             if (clase != null && !clase.equals(esperado)) {
-                filasErrores.add(new Object[]{"Sem\u00e1ntico",
+                filasErrores.add(new Object[]{"Semántico",
                     "El archivo debe llamarse igual que la clase pública '" + clase + "'.",
                     programa.getLine(), programa.getColumn()});
             }
@@ -254,15 +323,15 @@ public class VentanaPrincipal extends JFrame {
         for (ImportNode importacion : importsDe(programa)) {
             File archivoImportado = resolverImport(importacion.rutaCompleta);
             if (archivoImportado == null) {
-                filasErrores.add(new Object[]{"Sem\u00e1ntico",
-                    "No se encontr\u00f3 el archivo importado '" + importacion.rutaCompleta + "'.",
+                filasErrores.add(new Object[]{"Semántico",
+                    "No se encontró el archivo importado '" + importacion.rutaCompleta + "'.",
                     importacion.getLine(), importacion.getColumn()});
                 continue;
             }
             ProgramNode programaImportado = construirAST(archivoImportado);
             if (programaImportado == null) {
                 log.agregarPendiente("El constructor de AST de " + extensionDe(archivoImportado).toUpperCase()
-                        + " a\u00fan no est\u00e1 implementado (import '" + importacion.rutaCompleta + "').");
+                        + " aún no está implementado (import '" + importacion.rutaCompleta + "').");
                 continue;
             }
             programas.add(programaImportado);
@@ -273,36 +342,71 @@ public class VentanaPrincipal extends JFrame {
 
         if (errores.hasErrors()) {
             for (cunoc.compi2.alien_code.errors.CompilerError error : errores.getErrors()) {
-                filasErrores.add(new Object[]{"Sem\u00e1ntico", error.getMessage(),
+                filasErrores.add(new Object[]{"Semántico", error.getMessage(),
                     error.getLine(), error.getColumn()});
             }
         }
 
         if (!filasErrores.isEmpty()) {
+            for (Object[] fila : filasErrores) {
+                String tipo = String.valueOf(fila[0]);
+                String mensaje = String.valueOf(fila[1]);
+                int linea = ((Number) fila[2]).intValue();
+                int columna = ((Number) fila[3]).intValue();
+                log.agregarError("[" + tipo + "] "
+                    + (linea > 0 ? "Línea " + linea + ", Columna " + columna + ": " : "")
+                    + mensaje);
+            }
             ventanaErrores.setDatos(filasErrores);
             log.agregarError("Se detectaron " + filasErrores.size()
                 + " error(es). Ver Reportes > Ver errores.");
             return;
         }
 
-        log.agregarExito("An\u00e1lisis sem\u00e1ntico completado.");
+        log.agregarExito("Análisis semántico completado.");
         mostrarSimbolos(analizador.getSymbolTable());
 
         ventanaCuartetas.limpiar();
-        IntermediateCodeGenerator generador = new IntermediateCodeGenerator(errores);
-        generador.setSymbolTable(analizador.getSymbolTable());
+        IntermediateCodeGenerator generador = new IntermediateCodeGenerator(errores,
+                analizador.getSymbolTable());
         for (ProgramNode p : programas) {
             p.traducir(generador);
         }
+        List<Cuarteta> instrucciones = generador.getInstrucciones();
         List<Object[]> filasCuartetas = new ArrayList<>();
         int contador = 0;
-        for (Cuarteta cuarteta : generador.getCuartetas()) {
-            filasCuartetas.add(new Object[]{++contador, cuarteta.operador,
-                cuarteta.operando1, cuarteta.operando2, cuarteta.resultado});
+        for (Cuarteta cuarteta : instrucciones) {
+            filasCuartetas.add(new Object[]{++contador, cuarteta.operator(),
+                textoDe(cuarteta.getOperand1()), textoDe(cuarteta.getOperand2()),
+                textoDe(cuarteta.getResult())});
         }
         ventanaCuartetas.setDatos(filasCuartetas);
         log.agregarExito("Cuartetas generadas: " + contador
             + ". Ver Reportes > Ver cuartetas.");
+
+        ventanaC3D.limpiar();
+        List<Object[]> filasC3D = new ArrayList<>();
+        int numeroC3D = 0;
+        StringBuilder linea = new StringBuilder();
+        for (Cuarteta instruccion : instrucciones) {
+            linea.setLength(0);
+            instruccion.toCCode(linea);
+            filasC3D.add(new Object[]{++numeroC3D, linea.toString()});
+        }
+        ventanaC3D.setDatos(filasC3D);
+        codigoCActual = new CCodeGenerator().generate(instrucciones,
+                analizador.getSymbolTable(), generador.getTiposTemporales());
+        log.agregarExito("C3D generado (" + numeroC3D + " instrucciones). Ver Reportes > Ver C3D.");
+        log.agregarExito("Código C generado. Ver Reportes > Ver código C.");
+    }
+
+    private String textoDe(MemoryAccess acceso) {
+        if (acceso == null) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        acceso.toCCode(sb);
+        return sb.toString();
     }
 
     private ProgramNode construirAST(File archivo) {
@@ -381,7 +485,12 @@ public class VentanaPrincipal extends JFrame {
     }
 
     private void verCodigoC(PanelLog log) {
-        log.agregar("El código C generado se mostrará aquí cuando el pipeline esté conectado.");
+        if (codigoCActual == null) {
+            log.agregarPendiente("Compila un archivo primero para generar código C.");
+            return;
+        }
+        VentanaCodigoC ventana = new VentanaCodigoC(this, "Código C generado", codigoCActual, log);
+        ventana.setVisible(true);
     }
 
     private void acercaDe() {

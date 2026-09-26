@@ -1,12 +1,11 @@
 package cunoc.compi2.alien_code.ast.program;
-import cunoc.compi2.alien_code.ast.Type;
-import cunoc.compi2.alien_code.semantic.ContextoSemantico;
-import cunoc.compi2.alien_code.ir.CodigoContexto;
-import cunoc.compi2.alien_code.ast.ASTVisitor;
-
 import cunoc.compi2.alien_code.ast.Node;
+import cunoc.compi2.alien_code.ast.Sentencia;
+import cunoc.compi2.alien_code.ast.Type;
+import cunoc.compi2.alien_code.ir.CodigoContexto;
+import cunoc.compi2.alien_code.semantic.ContextoSemantico;
 
-public class ImportNode implements Node {
+public class ImportNode extends Sentencia {
     public String rutaCompleta;
     private final int line;
     private final int column;
@@ -18,11 +17,6 @@ public class ImportNode implements Node {
     }
 
     @Override
-    public <T> T accept(ASTVisitor<T> visitor) {
-        return visitor.visitImport(this);
-    }
-
-    @Override
     public int getLine() { return line; }
 
     @Override
@@ -30,8 +24,7 @@ public class ImportNode implements Node {
 
 
     @Override
-    public String traducir(CodigoContexto ctx) {
-        return null;
+    public void traducir(CodigoContexto ctx) {
     }
     @Override
     public Type analizar(ContextoSemantico ctx) {

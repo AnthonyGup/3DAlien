@@ -40,8 +40,9 @@ Reglas para quien genere planes:
 | **Pig Latin** | `.pig` | Lenguaje **principal**: contiene la sección `MAIOR>` (el "main"). NO declara estructuras ni funciones: las importa de `.y`/`.z`. Sintaxis Pig Latin (`MAIOR>`, `FINIS;`, `VARIABILES>`). |
 
 Los tres son **case sensitive**. Los tres producen nodos del **mismo AST** (`ast.*`) y son
-validados por un **único** análisis semántico en **dos pases**. El backend (cuartetas →
-C3D → C) es un único pipeline compartido.
+validados por un **único** análisis semántico en **dos pases**. El backend es un único
+pipeline compartido: los nodos emiten **cuartetas tipadas** (`c3d.cuartetas.*`) cuyo render
+`toCCode` es a la vez C3D y código C final.
 
 ---
 
@@ -61,7 +62,7 @@ Principio central: **se separa lo que de verdad es distinto por idioma de lo que
 |---|---|
 | Gramática ANTLR (`.g4`) | Nodos del AST (`ast.*`) |
 | `ASTBuilder` (traduce el ParseTree de ANTLR a nodos `ast.*`) | Análisis semántico (`semantic.*`) |
-| `Vocabulary` trivial (traduce nombres de tipo) | Generación de cuartetas / C3D / C |
+| Traducción de nombre de tipo → `Type` (en `Type.fromPigLatin`/`fromYLang`/`fromZetariano`) | Generación de cuartetas / C3D / C |
 
 ### Diagrama de flujo
 
@@ -96,15 +97,14 @@ Principio central: **se separa lo que de verdad es distinto por idioma de lo que
                        +-------------------------------+
                                        v
                        +--------------------+
-                       | Cuartetas (IR)     |
+                       | Cuartetas tipadas  |
+                       |  (c3d.cuartetas.*) |
                        +--------------------+
                                        v
                        +--------------------+
-                       | C3D                |
-                       +--------------------+
-                                       v
-                       +--------------------+
-                       | Código C           |
+                       | toCCode() +       |
+                       | CCodeGenerator →  |
+                       | Código C          |
                        +--------------------+
 ```
 
@@ -256,7 +256,6 @@ mvn exec:java               # arranca la GUI (aquí se prueba todo)
 │           ├── Alien_code.java                       # main → VentanaPrincipal
 │           ├── ast/                                  # AST UNICO
 │           │   ├── Node.java
-│           │   ├── ASTVisitor.java
 │           │   ├── Type.java
 │           │   ├── program/  ProgramNode, ImportNode
 │           │   ├── decl/     StructDeclNode, FunctionDeclNode, ClassDeclNode,
@@ -276,13 +275,13 @@ mvn exec:java               # arranca la GUI (aquí se prueba todo)
 │           │   ├── SymbolTable.java
 │           │   └── TypeCompat.java                   # reglas de compatibilidad de tipos
 │           ├── pigLatin/astbuilder/PigLatinASTBuilder.java
-│           ├── pigLatin/semantic/PigLatinVocabulary.java
 │           ├── ylang/astbuilder/YLangASTBuilder.java           # implementado
-│           ├── ylang/semantic/YLangVocabulary.java
 │           ├── zetariano/astbuilder/ZetarianoASTBuilder.java   # implementado
-│           ├── zetariano/semantic/ZetarianoVocabulary.java
-│           ├── ir/        CodigoContexto, Cuarteta, IntermediateCodeGenerator
-│           ├── c3d/       C3DInstruction, C3DGenerator
+│           ├── ir/        CodigoContexto, IntermediateCodeGenerator, Operandos,
+│           │              Impresion
+│           ├── c3d/       TiposC, CodeTransformable,
+│           │              access/ (MemoryAccess y 6 accesos),
+│           │              cuartetas/ (Cuarteta y 14 cuartetas tipadas)
 │           ├── codegen/   CCodeGenerator
 │           ├── errors/    ErrorType, CompilerError, ErrorListener
 │           └── ui/        VentanaPrincipal, VentanaMenuBar, VentanaReporte,
@@ -310,13 +309,20 @@ en la corrección. Todo import de nodos es `cunoc.compi2.alien_code.ast.*`.
 package cunoc.compi2.alien_code.ast;
 
 public interface Node {
-    <T> T accept(ASTVisitor<T> visitor);   // patrón visitante
-    String traducir(CodigoContexto ctx);   // generación de cuartetas (HOY return null)
     int getLine();                          // línea base 1
     int getColumn();                        // columna base 1
     Type analizar(ContextoSemantico ctx);   // semántica (34/34 nodos implementados)
 }
+
+// La traducción (Fase 4) NO vive en `Node`: la heredan las dos clases base:
+public abstract class Expresion implements Node { MemoryAccess traducir(CodigoContexto ctx); }
+public abstract class Sentencia implements Node { void traducir(CodigoContexto ctx); }
 ```
+
+`ProgramNode`, `ImportNode` y todos los nodos de `decl`/`stmt` (incluyendo `FunctionDeclNode`,
+`ClassDeclNode`, etc.) extienden `Sentencia`; los `expr` extienden `Expresion`. Único nodo que
+implementa `Node` directo sin `traducir`: `ParameterNode`. `Expresion.traducir` devuelve el
+acceso C3D (`c3d.access.MemoryAccess`) donde quedó el resultado de la subexpresión.
 
 ### 6.2 `Type` (enum compartido)
 
@@ -336,29 +342,19 @@ Mapeos estáticos (con `name.toLowerCase()`):
       definido en otro archivo (STRUCT/CLASS) — los builders resuelven eso con
       `Type.STRUCT`/`Type.CLASS` + `tipoNombre`/`nombreClase`.
 
-### 6.3 `ASTVisitor<T>`
+### 6.3 `ASTVisitor` — eliminado
 
-Interfaz con un método por tipo de nodo. Todos son `default` y devuelven `null` salvo
-`visitProgram` (abstracto). Métodos:
-
-`visitProgram(ProgramNode)`, `visitImport(ImportNode)`,
-`visitVariableDecl`, `visitArrayDecl`, `visitStructLiteral`, `visitBlock`, `visitAccess`,
-`visitNewObject`, `visitAssignment`, `visitIncrement`, `visitDecrement`, `visitRead`,
-`visitPrint`, `visitWhile`, `visitDoWhile`, `visitFor`, `visitContinue`, `visitBreak`,
-`visitIf`, `visitElseIf`, `visitLiteral`, `visitBinaryOp`, `visitUnaryOp`,
-`visitStructDecl(StructDeclNode)`, `visitFunctionDecl(FunctionDeclNode)`,
-`visitClassDecl(ClassDeclNode)`, `visitConstructorDecl(ConstructorDeclNode)`,
-`visitMethodDecl(MethodDeclNode)`, `visitParameter(ParameterNode)`,
-`visitReturn(ReturnNode)`, `visitSwitch(SwitchNode)`, `visitCase(CaseNode)`,
-`visitConditional(ConditionalNode)`, `visitNewArray(NewArrayNode)`.
+El patrón visitante (`ASTVisitor` + `accept` en cada nodo) se eliminó por no utilizarse:
+la semántica y la generación de cuartetas recorren el AST vía `ctx.evaluar(...)` /
+`traducir(ctx)`.
 
 ---
 
 ## 7. Nodos del AST — referencia de campos y constructores
 
 Convención: campos públicos (POJO), línea/columna `final private` con getters. Cada nodo
-implementa `accept` (con su `visit...`), `getLine` y `getColumn`. `traducir` **sigue como
-stub** (`return null`) en todos. `analizar` está implementado en los **34 nodos**
+implementa `traducir` (P7, §9), `analizar` (P5) y `getLine`/`getColumn`; el patrón
+visitante fue eliminado (§6.3). `analizar` está implementado en los **34 nodos**
 (fases Pig Latin + Y? + Zetariano, ver 8.7–8.8).
 
 ### 7.1 `program`
@@ -780,56 +776,112 @@ y `!` crudo.
 
 ## 11. Referencia del backend (`ir`, `c3d`, `codegen`)
 
-Todo el backend está **estructurado pero sin lógica completa**.
+El backend genera **cuartetas tipadas** (`c3d.cuartetas.*` reutilizando accesos de
+`c3d.access`) y su render a C es a la vez el "C3D" y el código C final: NO existe un pase
+intermedio `C3DGenerator` (fue eliminado en la Fase 5).
 
 ### 11.1 `ir.CodigoContexto` (contrato de emisión)
 
 ```java
 public interface CodigoContexto {
-    String nuevoTemporal();                       // "t0", "t1", ...
+    int nuevoIndiceTemporal();                    // reserva el nº de temporales
     String nuevaEtiqueta();                       // "L0", "L1", ...
-    void emitir(String operador, String operando1, String operando2, String resultado);
+    void agregar(Cuarteta cuarteta);              // cuartetas TIPADAS (c3d.cuartetas.*)
     void empujarCiclo(String etiquetaContinuar, String etiquetaSalida);
     void popCiclo();
     String etiquetaContinuarActual();             // null si no hay ciclo
     String etiquetaSalidaActual();
+    void pushClassTranslation(String nombre);     // pila de clase (sufijo _i)
+    void popClassTranslation();
+    String currentClassName();
+    int nextMethodIndex(String methodName);
+    int nextConstructorIndex();
+    void registrarTipoTemporal(int temporal, String ctype);  // tipo C de cada temporal
+    String tipoDeTemporal(int temporal);
+    Symbol resolverSimbolo(String nombre);        // mapa plano sobre la tabla
+    SymbolTable getSymbolTable();
 }
 ```
 
 ### 11.2 `ir.IntermediateCodeGenerator` (implementa `CodigoContexto`)
 
-Campos: `List<Cuarteta> cuartetas`, `ErrorListener`, `Deque<String[]> ciclos`,
-`tempCounter`, `labelCounter`. API: `getCuartetas()`, `getErrorListener()`, aditivo
-`setSymbolTable(SymbolTable)` (captura `ambitoActual()` como ámbito global), registros de
-metadatos de temporales (`recordTemporalType`/`recordTemporal`/`describeValue` →
-`ValueInfo{type,isArray,dimensiones,tipoNombre}`), espejo de scopes para resolución local
-(`entrarAmbitoTraduccion()`/`entrarAmbitoTraduccion(Scope)`/`salirAmbitoTraduccion`/
-`definirEnTraduccion`/`resolveForTranslation`), pila de clases (`push/popClassTranslation`,
-`currentClassName`/`currentClassMembers`, `nextMethodIndex`/`nextConstructorIndex`) y
-`overloadIndexByArgCount` (sobrecarga por cantidad de argumentos). **HECHO (P7)**: los 34
-nodos implementan `traducir(ctx)`; vocabulario: `label`, `goto`, `if_false`, `if_true`,
-`=`, `+ - * / %`, `== != < > <= >=`, `!`, `.`, `[]`, `[]=`, `call`, `print`, `read`,
-`return`, `newarray`, `array`, `func`/`func_end`, `struct`, `case` y `halt`.
+Campos: `List<Cuarteta> instrucciones` (cuartetas tipadas), `Map<Integer,String>
+tiposTemporales`, `Deque<String[]> ciclos`, `tempCounter`, `labelCounter`, pila de clases y
+un mapa plano `simbolosPlano` construido de forma lazy desde `tabla.listarSimbolos()`
+(first-wins; la tabla puede llegar vacía si se emite sin semántica previa). API:
+`getInstrucciones()`, `getTiposTemporales()`, constructores `(ErrorListener)` y
+`(ErrorListener, SymbolTable)`, `resolverSimbolo(nombre)`, pila de clases (`_i` de
+métodos/constructores: `pushClassTranslation`/`popClassTranslation`, `currentClassName`,
+`nextMethodIndex`/`nextConstructorIndex`) y `overloadIndexByArgCount`. **Los nodos emiten
+con `agregar(...)`**: no hay `emitir`/`nuevoTemporal` de String. El factory de accesos es
+`ir.Operandos` (`temporal(ctx,ctype)` — registra además el tipo C, `etiqueta`, `nombre`,
+`tipoDe`, `ctypeDe`, `literalBraces`, `ejecutar`) y el de texto de impresión es
+`ir.Impresion.print`. **HECHO (Fase 4)**: los 34 nodos implementan `traducir(ctx)`; los
+temporales de expresión/escondite son `tN` con tipo C registrado en `registrarTipoTemporal`.
 
-### 11.3 `ir.Cuarteta`
+### 11.3 Accesos y cuartetas tipadas (`c3d`)
 
-POJO `(operador, operando1, operando2, resultado)` con `toString()` = `(op, a1, a2, res)`.
+**`ir.Cuarteta`, `c3d.C3DInstruction` y `c3d.C3DGenerator` fueron ELIMINADOS (Fase 5).**
+En su lugar:
 
-### 11.4 `c3d.C3DInstruction` y `c3d.C3DGenerator`
+- `c3d.CodeTransformable`: `void toCCode(StringBuilder sb);`
+- `c3d.TiposC`: mapa de tipos Alien → C (`INT/BOOL→int`, `FLOAT→double`, `CHAR→char`,
+  `STRING→char*`, `STRUCT/CLASS→struct X *`, `ARRAY→void*` con retorno `void*` como
+  limitación documentada).
+- `c3d.access.MemoryAccess` (abstracta): tipo/dims (`getTipoNombre`, `getDimensiones`) y
+  `toCCode(sb)`. Subclases: `NameAccess` (`x`, y `self->x` si es campo de la clase actual),
+  `CampoAccess` (`base->campo`), `IndiceAccess` (`base[i]`/`base[i][j]`),
+  `TemporalAccess` (`tN`), `Literal3D` (texto crudo) y `LabelAccess` (`L0`).
+- `c3d.cuartetas.Cuarteta` (abstracta): `operator()`, `getOperand1/getOperand2/getResult()`
+  (operandos `String`, resultado `MemoryAccess`), `toCCode(sb)` y `static render(MemoryAccess)`.
+  Subclases: `Asignacion3D`, `Operacion3D`, `Condicional3D`, `Goto3D`, `Etiqueta3D`,
+  `Llamada3D`, `Imprimir3D`, `Leer3D`, `Retornar3D`, `InicioFuncion3D`,
+  `FinFuncion3D`, `DeclararArreglo3D`, `Marcador3D` y `Halt3D`.
 
-- `C3DInstruction`: `(operador, operando1, operando2, resultado)`; `toString()` =
-  `res = op1 operador op2;` o, si `resultado` vacío, `operador op1 op2;`.
-- `C3DGenerator`: `getInstructions()`, `newLabel()`, `generate(List<Cuarteta>)` **vacío**
-  (PENDIENTE). Es el traductor cuarteta→C3D (p.ej. cuarteta `goto`/`if` → salto C3D).
+### 11.4 Render C3D/C por cuarteta (una sola fuente de verdad)
+
+El texto que muestra "Ver C3D" y el que alimenta al `.c` es el **mismo**:
+`cuarteta.toCCode(sb)`. Detalles:
+
+- Accesos: `self->campo` (campo de la clase actual en Pig Latin/Zetariano), `a->b`
+  (`CampoAccess`), `a[i]`/`a[i][j]` (índices), `tN` (temporales), literales tal cual, `L0`.
+- `Operacion3D`: `res = a op b;` (binaria), `res = op a;` (unaria), `res = a;` (sin destino),
+  y `res = conc(a, b);` para `conc`/`strn`/`strd` (concatenación).
+- `Condicional3D`: `if (!(c)) goto L;` (verdadero=false) / `if (c) goto L;` (verdadero=true).
+- `Llamada3D`: `[res =] f(a, b);`.
+- `Imprimir3D`: un solo `printf("fmt", args);`; formato por tipo del argumento (`%d` int,
+  `%g` double, `%s` string, booleano como ternario `e ? "true" : "false"`, `%c` char, `%p`
+  struct). El texto y la lista de argumentos ya los arma `ir.Impresion.print` (distingue
+  literales de texto de argumentos). `Leer3D`: `scanf("…", [&]obj);` con `&` para escalares
+  (el destino, por ejemplo un campo `&self->x`)
+- `Retornar3D`: `return x;` o `return;`; `Halt3D`: `exit(0);`.
+- Marcadores: `InicioFuncion3D` (`// func nombre (descripcion)`, con getters `getNombre/
+  getDescripcion/getClase/getRetorno`), `FinFuncion3D` (`// func_end …`) y
+  `DeclararArreglo3D` (`// array nombre (dims)`); en la vista C3D se muestran como
+  comentarios y `CCodeGenerator` los usa para partir el código (no se escriben al `.c`).
 
 ### 11.5 `codegen.CCodeGenerator`
 
-`generate(List<C3DInstruction>)` hoy solo escribe las cabeceras
-`#include <stdio.h>` / `#include <stdlib.h>`. `getCode()`. **PENDIENTE**: emitir código C
-a partir de las instrucciones C3D (variables, arreglos, structs/objetos con tipos del
-lenguaje destino, funciones/métodos). Decisión del plan: en qué C se bajan structs y
-objetos (structs de C; clases → structs + funciones libres o paralelas) y cómo se maneja
-la entrada/salida (`printf`/`scanf`, y el "leer" tipado de Pig Latin).
+**HECHO (Fase 5)** — `generate(List<Cuarteta>, SymbolTable, Map<Integer,String>
+tiposTemporales)` ensambla el `.c` completo (devuelve el texto desde `generate`; no hay
+`getCode()`):
+
+1. Cabeceras `#include <stdio.h>`/`<stdlib.h>` (+`<string.h>` si hay `conc/strn/strd`) y
+   helper `conc` (malloc + memcpy) cuando alguna cuarteta usa concatenación (detectada por
+   `Llamada3D.getFuncion()` o el operador de `Operacion3D`).
+2. `typedef` forward y definición de cada estructura/clase
+   (`Symbol.Kind.ESTRUCTURA/CLASE`) con sus campos (`isField`) mapeados a C; campo-arreglo →
+   `elem *` (arreglo de struct → `struct X *` el elemento).
+3. Arreglos fijos globales (`DeclararArreglo3D` fuera de función → `scalarDePalabra + nombre
+   + dims`, p.ej. `int m[2][3];`) y variables globales escalares (`tabla.resolve(nombre)` no
+   nulo, excluye campos y arreglos).
+4. Prototipos y cuerpos: la firma sale de `InicioFuncion3D` (`getRetorno()`, y el descriptor
+   `self:Clase; a:int; ...` → parámetros). En cada cuerpo se declaran sus arreglos fijos,
+   temporales (`tN` → `tiposTemporales`, con fallback `int`) y locales (símbolos VARIABLE
+   no-parámetro no-campo no-global) recolectando los tokens del texto render (los nombres
+   tras `->`/`.` no se declaran).
+5. `main`: si hay `Halt3D` (Pig Latin, fin del `MAIOR>` proyectado en Pig Latin) → cuerpo
+   con las cuartetas de nivel 0 + `return 0;`; si no → `int main(void) { return 0; }`.
 
 ---
 
@@ -862,7 +914,8 @@ Campos de reporte: `ventanaErrores` (`{"Tipo","Descripción","Línea","Columna"}
 2. Editor activo → `VerificadorSintactico.verificar(texto, archivo)`.
 3. Si extensión no válida → error y fin.
 4. Log tokens + "Análisis sintáctico...". Si hay errores sintácticos → filas en
-   `ventanaErrores` + resumen en log, y fin.
+   `ventanaErrores` + cada error también al log (`[Sintáctico] Línea X, Columna Y: …`)
+   + resumen en log, y fin.
 5. Sin errores sintácticos: si el archivo es `.pig`/`.y`/`.z`,
    `ejecutarPipelineSemantico(archivo, log, ventanaErrores)`:
    - `construirAST(archivo)` según extensión (si `null` → error).
@@ -873,20 +926,31 @@ Campos de reporte: `ventanaErrores` (`{"Tipo","Descripción","Línea","Columna"}
      posición del import; si el builder devuelve `null` → pendiente en log.
    - `SemanticAnalyzer.analizar(programas)` → errores semánticos a filas de
      `ventanaErrores`.
-   - Si hay filas de error → resumen en log y fin (no se muestran símbolos).
+   - Si hay filas de error → cada error también al log (`[Semántico] Línea X, Columna Y: …`)
+      + resumen en log y fin (no se muestran símbolos).
 - Si no: "Análisis semántico completado." + `mostrarSimbolos(...)` → `ventanaSimbolos`
       (`Tipo` muestra `"vacio"` si es `null` como `leer`; `Valor` siempre `"-"`;
       `Línea` desde `Symbol.getLinea()` o `"-"`).
-   - P7: `ventanaCuartetas.limpiar()`, `new IntermediateCodeGenerator(errores)`,
-      `generador.setSymbolTable(analizador.getSymbolTable())`, `p.traducir(generador)` por
-      cada programa (incluidos los importados), y cada cuarteta → fila
-      `{#incremental, operador, operando1, operando2, resultado}` con resumen
+   - P7: `ventanaCuartetas.limpiar()`, `new IntermediateCodeGenerator(errores,
+      analizador.getSymbolTable())` y `p.traducir(generador)` por
+      cada programa (incluidos los importados); cada cuarteta → fila
+      `{#incremental, cuarteta.operator(), textoDe(cuarteta.getOperand1()),
+       textoDe(cuarteta.getOperand2()), textoDe(cuarteta.getResult())}` (helper
+      `textoDe(MemoryAccess)` = `null`→`"-"`, si no `toCCode`) con resumen
       "Cuartetas generadas: N".
+   - P8/P9 (unificados en la Fase 5, ya no hay `C3DGenerator`): `ventanaC3D.limpiar()`
+      y se llena con el **mismo** texto `toCCode` de cada cuarteta de
+      `generador.getInstrucciones()` → fila `{#incremental, texto}`; `codigoCActual` =
+      `new CCodeGenerator().generate(instrucciones, analizador.getSymbolTable(),
+      generador.getTiposTemporales())`; log "C3D generado (N)" + "Código C generado".
 6. Otra extensión → log "pendiente backend".
 
 - [x] **HECHO (P7)**: cuartetas a `ventanaCuartetas`.
-- [ ] **PENDIENTE (conectar)**: C3D a `ventanaC3D`, código C (menú "Ver código C" hoy
-      muestra un placeholder).
+- [x] **HECHO (P8/P9, Fase 5)**: C3D a `ventanaC3D` y código C en `codigoCActual`; ambos
+      salen del mismo render `toCCode` de `getInstrucciones()`; "Ver código C"
+      abre `VentanaCodigoC` (JTextArea en fuente `Font.MONOSPACED`, botón "Guardar..."
+      con `JFileChooser` por defecto `codigo.c`); si no hay código aún → log pendiente
+      "Compila un archivo primero".
 - [ ] **PENDIENTE (robustez)**: los builders de los imports se invocan sin verificación
       sintáctica previa. Los planes deben incluir attaching de `ErrorListener` o
       verificación previa para que un `.y`/`.z` mal parseado no rompa el runtime.
@@ -936,7 +1000,10 @@ Carpeta `Ejemplos/` (en la raíz): `ejemplo.pig`, `ejemplo.y`, `Persona.z` (el `
 llama igual que su clase, regla del spec, verificada por la GUI). Cubren casi todo cada
 gramática y están verificados: 0 errores sintácticos en los 3 y 0 errores semánticos en
 los 3 (pipeline completo en cada lenguaje). Abrir esa carpeta como proyecto en la GUI
-sirve como prueba manual de regresión. Notas: `BinaryOpNode` acepta `<=`/`>=`/`%` (las
+sirve como prueba manual de regresión. **Tras la unificación del backend (Fases 4-5) los
+conteos de cuartetas re-baselined son 147 (`ejemplo.pig`), 183 (`ejemplo.y`) y 204
+(`Persona.z`)**; el `.c` de cada uno se genera con el render directo de la cuartetas (ya
+no hay conteo separado del pase C3D). Notas: `BinaryOpNode` acepta `<=`/`>=`/`%` (las
 gramáticas los producen); `UnaryOpNode` acepta `"non"` (Pig Latin) y `"!"` (Y?/Z).
 
 Casos manuales que también deben seguir pasando (errores esperados): estructura con campo de tipo desconocido,
@@ -963,14 +1030,15 @@ booleana o ramas incompatibles, `new int[x]` con tamaño no entero.
 | Pase A (`registrarEstructura`/`registrarFuncion`/`registrarClase`/`registrarNativas`) + Pase B | Operativos; Pase B analiza los 34 nodos |
 | `Node.analizar` | Implementado en 34/34 nodos (fases Pig Latin + Y? + Zetariano) |
 | `TypeCompat` (+ reglas `NULL`) / `Symbol` (firmas, nativas, dims, `variable()`) / `Scope` (`resolveLocal`, orden) / `SymbolTable.registro` | Terminados |
-| `Node.traducir` (34 nodos) | Implementado en 34/34 (fase P7; IR `CodigoContexto` + `IntermediateCodeGenerator`) |
-| `C3DGenerator.generate` | Vacío (P8) |
-| `CCodeGenerator.generate` | Solo cabeceras (P9) |
+| `traducir` (34 nodos) | Implementado en 34/34 (Fase 4): `Expresion.traducir` → `MemoryAccess`; `Sentencia.traducir` → `void`; `ProgramNode`/decl/import son `Sentencia`; `ParameterNode` es `Node` sin `traducir` |
+| Cuartetas tipadas (`c3d/cuartetas` + `c3d/access`) | Hecho (Fase 4) — los nodos emiten `Cuarteta` tipadas; `toCCode` por cuarteta |
+| `C3DGenerator.generate` / `c3d.C3DInstruction` / `ir.Cuarteta` plana | ELIMINADOS (Fase 5) — el render de cada cuarteta tipada es a la vez C3D y C |
+| `CCodeGenerator.generate` | Hecho (Fase 5) — `generate(List<Cuarteta>, SymbolTable, tiposTemporales)` ensambla el `.c` (structs, arreglos, funciones, main) |
 | Resolución de imports + tabla de símbolos en la UI | Operativa (`.pig`/`.y`/`.z`; la tabla incluye locales, params y nativas) |
 | Reporte de errores en la UI | Conectado (sintácticos + semánticos + archivo==clase en `ventanaErrores`) |
-| Reporte de cuartetas en la UI | Conectado (llenado tras el análisis semántico en `ventanaCuartetas`) |
-| Reportes de C3D/código C en la UI | No conectados (P8/P9) |
-| Pipeline UI | Completo para compilación: `.pig`/`.y`/`.z` → sintaxis + imports + 2 pases + símbolos + cuartetas (C3D/C pendientes) |
+| Reporte de cuartetas en la UI | Conectado (se llena desde `getInstrucciones()` tras el análisis semántico) |
+| Reportes de C3D/código C en la UI | Conectados (Fase 5): `ventanaC3D` = render `toCCode`; "Ver código C" abre `VentanaCodigoC` con `codigoCActual` |
+| Pipeline UI | Completo para compilación: `.pig`/`.y`/`.z` → sintaxis + imports + 2 pases + símbolos + cuartetas → C3D/C |
 
 ---
 
@@ -982,8 +1050,7 @@ Orden recomendado de fases (cada una debe terminar compilando y verificada desde
    modelo `tipoElemento`+`dimensiones` (`VariableDeclNode`/`ArrayDeclNode`/`ParameterNode`/
    `Symbol`); `%` y `<=`/`>=` en `BinaryOpNode`; `"!"` en `UnaryOpNode`; desugar de `+=`.
 2. **P2 — Nodos faltantes: HECHO** — `ReturnNode`, `SwitchNode`/`CaseNode`,
-   `ConditionalNode`, `Clase.NULO`+`Type.NULL`, `NewArrayNode`, todos con `analizar` y
-   registrados en `ASTVisitor`.
+   `ConditionalNode`, `Clase.NULO`+`Type.NULL`, `NewArrayNode`, todos con `analizar`.
 3. **P3 — `YLangASTBuilder`: HECHO** (+ `children` en orden, `!` crudo, multidim).
 4. **P4 — `ZetarianoASTBuilder`: HECHO** (+ ternario, `null`, `new` arreglos, desugar,
    `cuerpoOSentencia`, `aplanarRamaElse`).
@@ -992,18 +1059,30 @@ Orden recomendado de fases (cada una debe terminar compilando y verificada desde
    de árboles/negativos. Menores restantes en §8.7.
 6. **P6 — Conectar UI: HECHO** (pipeline en 3 lenguajes, errores a `ventanaErrores`,
    chequeo archivo==clase). Resta robustez: verificación sintáctica previa de imports.
-7. **P7 — Cuartetas: HECHO** — `traducir` en 34/34 nodos + `IntermediateCodeGenerator`
-   (tabla vía `setSymbolTable`, espejo de scopes para resolución local, sobrecarga por
-   conteo de argumentos, decoración `Clase_método_idx`/`Clase_init_idx`, marcadores
-   `func`/`func_end`/`struct`/`array`, `halt` solo Pig Latin) + reporte `ventanaCuartetas`.
-   Verificado: `mvn -B clean compile` + traducción de `Ejemplos/{ejemplo.pig,ejemplo.y,Persona.z}`
-   (0 errores semánticos, cuartetas revisadas a mano). *Dependió de P5.*
-8. **P8 — C3D**: `C3DGenerator.generate` + reporte `ventanaC3D`.
-9. **P9 — Código C**: `CCodeGenerator` + menú Ver código C + (decisión) guardar `.c`.
-   *Depende de P8.*
+7. **P7 — Cuartetas tipadas: HECHO (Fase 4)** — `traducir` en 34/34 nodos eliminando la
+   emisión plana: los nodos emiten directamente cuartetas tipadas
+   (`c3d.cuartetas.*` con accesos de `c3d.access`) vía `CodigoContexto.agregar`; el
+   `IntermediateCodeGenerator` recibe la tabla de símbolos (`resolverSimbolo`, mapa plano
+   first-wins) y mantiene `getInstrucciones()`/`getTiposTemporales()`;
+   `Operandos`/`Impresion` en `ir`; sobrecarga por conteo de argumentos, decoración
+   `Clase_método_idx`/`Clase_init_idx`, marcadores `func`/`func_end`/`array`/`halt` (Pig
+   Latin) + reporte `ventanaCuartetas`.
+   Verificado: `mvn -B clean compile` + traducción de
+   `Ejemplos/{ejemplo.pig,ejemplo.y,Persona.z}` (0 errores semánticos, cuartetas tipadas
+   revisadas a mano). *Dependió de P5.*
+8. **P8+P9 — C3D = C (una sola fuente): HECHO (Fase 5)** — se ELIMINÓ el pase intermedio
+   (`C3DGenerator`, `C3DInstruction`, `ir.Cuarteta` plana): cada cuarteta tipada
+   implementa `toCCode` que es a la vez C3D y C final. `CCodeGenerator` toma
+   `generate(getInstrucciones(), tabla, generador.getTiposTemporales())` y ensambla el
+   `.c`; `VentanaPrincipal` alimenta `ventanaCuartetas`/`ventanaC3D`/`codigoCActual`
+   desde `getInstrucciones()`. Re-baseline de conteos: 147/183/204. *Dependió de P7.*
 
-Otros pendientes registrados: Pase A recursivo a imports‑de‑imports, y decidir el C
-destino de structs/clases.
+Otros pendientes registrados: Pase A recursivo a imports‑de‑imports. Decisión de C destino
+de structs/clases tomada en P9: structs → `struct` de C; clases → `struct` + funciones
+libres (`Clase_metodo_i(...)` con `self` explícito); instancias siempre punteros
+(`malloc` + `->`), con limitaciones documentadas en §11.5 (retorno de arreglos → `void*`,
+`==` de cadenas compara punteros, structs declarados por valor se bajan a puntero sin
+inicializar).
 
 ---
 
@@ -1017,12 +1096,11 @@ destino de structs/clases.
    `entrarAmbito`, `registrarError`, `listarSimbolos`, `tipoDe`) NO se renombran.
 3. **Posiciones base 1** para línea y columna en todos los nodos y reportes.
 4. **Nunca crear paquetes `<lenguaje>.ast`**: usar siempre `ast.*`. Los únicos paquetes
-   por idioma son `grammar`, `astbuilder`, `semantic` (Vocabulary) y `ui` token makers.
+   por idioma son `grammar`, `astbuilder` y los token makers (`ui`).
 5. **Un nodo, una implementación**: cualquier nodo nuevo va al paquete `ast` (o
    `ast/decl`) y los 3 builders lo comparten.
-6. **No romper la API existente** sin justificarlo en el plan: `Node`, `ASTVisitor`,
-   constructores de nodos, `SymbolTable`, `ContextoSemantico` y `SemanticAnalyzer` son la
-   interfaz pública.
+6. **No romper la API existente** sin justificarlo en el plan: `Node`, constructores de
+   nodos, `SymbolTable`, `ContextoSemantico` y `SemanticAnalyzer` son la interfaz pública.
 7. **Decisiones abiertas** (gaps 7.5, tabla de compatibilidad, C destino, desugar de
    `+=`, etc.) deben decidirse en el plan y quedar documentadas ahí, no en el código.
 8. **Resultado de aceptación de cada fase:** `mvn -B clean compile` sin errores + caso
@@ -1051,10 +1129,10 @@ destino de structs/clases.
 | AST | Árbol de sintaxis abstracta, representación común del código fuente |
 | ANTLR | Generador de analizadores (lexer + parser) |
 | C3D (código de tres direcciones) | Código intermedio con instrucciones de tres operandos |
-| Cuarteta | Cuádrupla `(op, a1, a2, res)` de código intermedio |
+| Cuarteta | Instrucción de código intermedio tipada (`c3d.cuartetas.*`); su `toCCode` es a la vez C3D y código C |
 | Pase A | Pasada de la semántica que registra firmas/declaraciones sin revisar cuerpos |
 | Pase B | Pasada que verifica los cuerpos aprovechando el catálogo de Pase A |
 | INDENT / DEDENT | Tokens sintéticos que delimitan bloques indentados en Y? |
 | TokenMaker | Clase de RSyntaxTextArea para el resaltado de sintaxis |
-| Visitor | Patrón de diseño para recorrer el AST sin modificar los nodos |
-| Vocabulary | Traducción nombre de tipo → `Type` (una por idioma) |
+| Visitor | Patrón de diseño para recorrer el AST (eliminado: no se usaba, ver 6.3) |
+| Vocabulary | Traducción de nombre de tipo → `Type` (hoy en `Type.fromPigLatin`/`fromYLang`/`fromZetariano`) |

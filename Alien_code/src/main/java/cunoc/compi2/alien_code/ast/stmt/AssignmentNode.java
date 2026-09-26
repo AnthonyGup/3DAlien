@@ -1,17 +1,21 @@
 package cunoc.compi2.alien_code.ast.stmt;
-import cunoc.compi2.alien_code.ast.Type;
-import cunoc.compi2.alien_code.semantic.ContextoSemantico;
-import cunoc.compi2.alien_code.ir.CodigoContexto;
-import cunoc.compi2.alien_code.ast.ASTVisitor;
-
+import cunoc.compi2.alien_code.ast.Expresion;
 import cunoc.compi2.alien_code.ast.Node;
+import cunoc.compi2.alien_code.ast.Sentencia;
+import cunoc.compi2.alien_code.ast.Type;
+import cunoc.compi2.alien_code.c3d.access.Literal3D;
+import cunoc.compi2.alien_code.c3d.access.MemoryAccess;
+import cunoc.compi2.alien_code.c3d.cuartetas.Asignacion3D;
+import cunoc.compi2.alien_code.ir.CodigoContexto;
+import cunoc.compi2.alien_code.ir.Operandos;
+import cunoc.compi2.alien_code.semantic.ContextoSemantico;
 import cunoc.compi2.alien_code.ast.expr.AccessNode;
 import cunoc.compi2.alien_code.ast.expr.NewArrayNode;
 import cunoc.compi2.alien_code.ast.expr.StructLiteralNode;
 import cunoc.compi2.alien_code.semantic.Symbol;
 import cunoc.compi2.alien_code.semantic.TypeCompat;
 
-public class AssignmentNode implements Node {
+public class AssignmentNode extends Sentencia {
     public AccessNode destino;
     public Node valor;
     private final int line;
@@ -25,11 +29,6 @@ public class AssignmentNode implements Node {
     }
 
     @Override
-    public <T> T accept(ASTVisitor<T> visitor) {
-        return visitor.visitAssignment(this);
-    }
-
-    @Override
     public int getLine() { return line; }
 
     @Override
@@ -37,11 +36,13 @@ public class AssignmentNode implements Node {
 
 
     @Override
-    public String traducir(CodigoContexto ctx) {
-        String value = valor.traducir(ctx);
-        String target = destino.toLvalue(ctx);
-        ctx.emitir("=", value, null, target);
-        return null;
+    public void traducir(CodigoContexto ctx) {
+        MemoryAccess value = ((Expresion) valor).traducir(ctx);
+        MemoryAccess target = destino.toLvalue(ctx);
+        if (value instanceof Literal3D literal) {
+            value = Operandos.literalBraces(target, literal);
+        }
+        ctx.agregar(new Asignacion3D(target, value));
     }
     @Override
     public Type analizar(ContextoSemantico ctx) {

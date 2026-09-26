@@ -1,14 +1,18 @@
 package cunoc.compi2.alien_code.ast.stmt;
-import cunoc.compi2.alien_code.ast.Type;
-import cunoc.compi2.alien_code.semantic.ContextoSemantico;
-import cunoc.compi2.alien_code.ir.CodigoContexto;
-import cunoc.compi2.alien_code.ast.ASTVisitor;
-
+import cunoc.compi2.alien_code.ast.Expresion;
 import cunoc.compi2.alien_code.ast.Node;
+import cunoc.compi2.alien_code.ast.Sentencia;
+import cunoc.compi2.alien_code.ast.Type;
+import cunoc.compi2.alien_code.c3d.access.LabelAccess;
+import cunoc.compi2.alien_code.c3d.access.MemoryAccess;
+import cunoc.compi2.alien_code.c3d.cuartetas.Condicional3D;
+import cunoc.compi2.alien_code.c3d.cuartetas.Etiqueta3D;
+import cunoc.compi2.alien_code.c3d.cuartetas.Goto3D;
 import cunoc.compi2.alien_code.ir.CodigoContexto;
-import cunoc.compi2.alien_code.ir.IntermediateCodeGenerator;
+import cunoc.compi2.alien_code.ir.Operandos;
+import cunoc.compi2.alien_code.semantic.ContextoSemantico;
 
-public class ForNode implements Node {
+public class ForNode extends Sentencia {
     public Node inicial;
     public Node condicion;
     public Node paso;
@@ -26,11 +30,6 @@ public class ForNode implements Node {
     }
 
     @Override
-    public <T> T accept(ASTVisitor<T> visitor) {
-        return visitor.visitFor(this);
-    }
-
-    @Override
     public int getLine() { return line; }
 
     @Override
@@ -38,27 +37,23 @@ public class ForNode implements Node {
 
 
     @Override
-    public String traducir(CodigoContexto ctx) {
-        IntermediateCodeGenerator gen = (IntermediateCodeGenerator) ctx;
-        gen.entrarAmbitoTraduccion();
-        if (inicial != null) inicial.traducir(ctx);
-        String start = ctx.nuevaEtiqueta();
-        String cont = ctx.nuevaEtiqueta();
-        String end = ctx.nuevaEtiqueta();
-        ctx.emitir("label", null, null, start);
+    public void traducir(CodigoContexto ctx) {
+        if (inicial != null) Operandos.ejecutar(ctx, inicial);
+        LabelAccess start = Operandos.etiqueta(ctx);
+        LabelAccess cont = Operandos.etiqueta(ctx);
+        LabelAccess end = Operandos.etiqueta(ctx);
+        ctx.agregar(new Etiqueta3D(start));
         if (condicion != null) {
-            String cond = condicion.traducir(ctx);
-            ctx.emitir("if_false", cond, null, end);
+            MemoryAccess cond = ((Expresion) condicion).traducir(ctx);
+            ctx.agregar(new Condicional3D(false, cond, end));
         }
-        ctx.empujarCiclo(cont, end);
+        ctx.empujarCiclo(cont.getNombre(), end.getNombre());
         cuerpo.traducir(ctx);
         ctx.popCiclo();
-        ctx.emitir("label", null, null, cont);
-        if (paso != null) paso.traducir(ctx);
-        ctx.emitir("goto", null, null, start);
-        ctx.emitir("label", null, null, end);
-        gen.salirAmbitoTraduccion();
-        return null;
+        ctx.agregar(new Etiqueta3D(cont));
+        if (paso != null) Operandos.ejecutar(ctx, paso);
+        ctx.agregar(new Goto3D(start));
+        ctx.agregar(new Etiqueta3D(end));
     }
     @Override
     public Type analizar(ContextoSemantico ctx) {

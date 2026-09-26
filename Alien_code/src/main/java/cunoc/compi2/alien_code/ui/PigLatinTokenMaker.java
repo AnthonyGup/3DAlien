@@ -113,7 +113,6 @@ public class PigLatinTokenMaker extends AbstractTokenMaker {
             case PigLatinLexer.SERIES:
             case PigLatinLexer.NOVUS:
             case PigLatinLexer.FINIS:
-            case PigLatinLexer.PROGRAMA_FIN:
             case PigLatinLexer.SI:
             case PigLatinLexer.ALITER:
             case PigLatinLexer.DUM:

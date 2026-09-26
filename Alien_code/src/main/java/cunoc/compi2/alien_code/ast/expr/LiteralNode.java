@@ -1,13 +1,12 @@
 package cunoc.compi2.alien_code.ast.expr;
+import cunoc.compi2.alien_code.ast.Expresion;
 import cunoc.compi2.alien_code.ast.Type;
+import cunoc.compi2.alien_code.c3d.access.Literal3D;
+import cunoc.compi2.alien_code.c3d.access.MemoryAccess;
 import cunoc.compi2.alien_code.ir.CodigoContexto;
-import cunoc.compi2.alien_code.ir.IntermediateCodeGenerator;
 import cunoc.compi2.alien_code.semantic.ContextoSemantico;
-import cunoc.compi2.alien_code.ast.ASTVisitor;
 
-import cunoc.compi2.alien_code.ast.Node;
-
-public class LiteralNode implements Node {
+public class LiteralNode extends Expresion {
     public enum Clase { ENTERO, DECIMAL, CADENA, CARACTER, BOOLEANO, NULO }
 
     public Clase clase;
@@ -23,11 +22,6 @@ public class LiteralNode implements Node {
     }
 
     @Override
-    public <T> T accept(ASTVisitor<T> visitor) {
-        return visitor.visitLiteral(this);
-    }
-
-    @Override
     public int getLine() { return line; }
 
     @Override
@@ -35,20 +29,19 @@ public class LiteralNode implements Node {
 
 
     @Override
-    public String traducir(CodigoContexto ctx) {
-        ((IntermediateCodeGenerator) ctx).recordTemporalType(valor, tipoDeClase());
-        return valor;
-    }
-
-    private Type tipoDeClase() {
+    public MemoryAccess traducir(CodigoContexto ctx) {
         switch (clase) {
-            case ENTERO: return Type.INT;
-            case DECIMAL: return Type.FLOAT;
-            case CADENA: return Type.STRING;
-            case CARACTER: return Type.CHAR;
-            case BOOLEANO: return Type.BOOL;
-            case NULO: return Type.NULL;
-            default: return null;
+            case ENTERO: return new Literal3D(valor, Type.INT);
+            case DECIMAL: return new Literal3D(valor, Type.FLOAT);
+            case CADENA: return new Literal3D(valor, Type.STRING);
+            case CARACTER: return new Literal3D(valor, Type.CHAR);
+            case BOOLEANO: {
+                boolean cierto = valor != null && (valor.equals("true") || valor.equals("1")
+                        || valor.equals("verum") || valor.equals("verdadero"));
+                return new Literal3D(cierto ? "1" : "0", Type.BOOL);
+            }
+            case NULO: return new Literal3D("NULL", Type.NULL);
+            default: return new Literal3D("0", Type.INT);
         }
     }
     @Override

@@ -1,16 +1,20 @@
 package cunoc.compi2.alien_code.ast.stmt;
-import cunoc.compi2.alien_code.ast.Type;
-import cunoc.compi2.alien_code.semantic.ContextoSemantico;
-import cunoc.compi2.alien_code.ir.CodigoContexto;
-import cunoc.compi2.alien_code.ast.ASTVisitor;
-
+import cunoc.compi2.alien_code.ast.Expresion;
 import cunoc.compi2.alien_code.ast.Node;
+import cunoc.compi2.alien_code.ast.Sentencia;
+import cunoc.compi2.alien_code.ast.Type;
+import cunoc.compi2.alien_code.c3d.access.LabelAccess;
+import cunoc.compi2.alien_code.c3d.access.MemoryAccess;
+import cunoc.compi2.alien_code.c3d.cuartetas.Condicional3D;
+import cunoc.compi2.alien_code.c3d.cuartetas.Etiqueta3D;
+import cunoc.compi2.alien_code.c3d.cuartetas.Goto3D;
 import cunoc.compi2.alien_code.ir.CodigoContexto;
-import cunoc.compi2.alien_code.ir.IntermediateCodeGenerator;
+import cunoc.compi2.alien_code.ir.Operandos;
+import cunoc.compi2.alien_code.semantic.ContextoSemantico;
 
 import java.util.List;
 
-public class IfNode implements Node {
+public class IfNode extends Sentencia {
     public Node condicion;
     public BlockNode cuerpo;
     public List<ElseIfNode> ramas;
@@ -26,56 +30,43 @@ public class IfNode implements Node {
     }
 
     @Override
-    public <T> T accept(ASTVisitor<T> visitor) {
-        return visitor.visitIf(this);
-    }
-
-    @Override
     public int getLine() { return line; }
 
     @Override
     public int getColumn() { return column; }
 
     @Override
-    public String traducir(CodigoContexto ctx) {
-        IntermediateCodeGenerator gen = (IntermediateCodeGenerator) ctx;
-        String cond = condicion.traducir(ctx);
-        String end = ctx.nuevaEtiqueta();
-        String elseLabel = ramas.isEmpty() ? end : ctx.nuevaEtiqueta();
-        ctx.emitir("if_false", cond, null, elseLabel);
+    public void traducir(CodigoContexto ctx) {
+        MemoryAccess cond = ((Expresion) condicion).traducir(ctx);
+        LabelAccess end = Operandos.etiqueta(ctx);
+        LabelAccess elseLabel = ramas.isEmpty() ? end : Operandos.etiqueta(ctx);
+        ctx.agregar(new Condicional3D(false, cond, elseLabel));
 
-        gen.entrarAmbitoTraduccion();
         if (cuerpo != null) {
             cuerpo.traducir(ctx);
         }
-        gen.salirAmbitoTraduccion();
 
         if (ramas.isEmpty()) {
-            ctx.emitir("label", null, null, end);
-            return null;
+            ctx.agregar(new Etiqueta3D(end));
+            return;
         }
 
-        ctx.emitir("goto", null, null, end);
-        ctx.emitir("label", null, null, elseLabel);
+        ctx.agregar(new Goto3D(end));
+        ctx.agregar(new Etiqueta3D(elseLabel));
         for (int i = 0; i < ramas.size(); i++) {
             ElseIfNode rama = ramas.get(i);
             if (i == ramas.size() - 1 && rama.esElse()) {
-                gen.entrarAmbitoTraduccion();
                 rama.cuerpo.traducir(ctx);
-                gen.salirAmbitoTraduccion();
             } else {
-                String next = ctx.nuevaEtiqueta();
-                String condRama = rama.condicion.traducir(ctx);
-                ctx.emitir("if_false", condRama, null, next);
-                gen.entrarAmbitoTraduccion();
+                LabelAccess next = Operandos.etiqueta(ctx);
+                MemoryAccess condRama = ((Expresion) rama.condicion).traducir(ctx);
+                ctx.agregar(new Condicional3D(false, condRama, next));
                 rama.cuerpo.traducir(ctx);
-                gen.salirAmbitoTraduccion();
-                ctx.emitir("goto", null, null, end);
-                ctx.emitir("label", null, null, next);
+                ctx.agregar(new Goto3D(end));
+                ctx.agregar(new Etiqueta3D(next));
             }
         }
-        ctx.emitir("label", null, null, end);
-        return null;
+        ctx.agregar(new Etiqueta3D(end));
     }
     @Override
     public Type analizar(ContextoSemantico ctx) {
