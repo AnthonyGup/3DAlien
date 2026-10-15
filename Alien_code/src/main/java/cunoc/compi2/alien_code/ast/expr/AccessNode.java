@@ -22,6 +22,7 @@ import java.util.List;
 public class AccessNode extends Expresion {
     public String nombre;
     public List<Sufijo> sufijos;
+    private Symbol baseResuelto;
     private final int line;
     private final int column;
 
@@ -71,7 +72,7 @@ public class AccessNode extends Expresion {
 
     @Override
     public MemoryAccess traducir(CodigoContexto ctx) {
-        Symbol baseSymbol = ctx.resolverSimbolo(nombre);
+        Symbol baseSymbol = baseResuelto != null ? baseResuelto : ctx.resolverSimbolo(nombre);
         MemoryAccess actual = Operandos.nombre(ctx, nombre, baseSymbol);
         String metodoPendiente = null;
         String claseObjetivo = null;
@@ -82,9 +83,13 @@ public class AccessNode extends Expresion {
                     claseObjetivo = s.claseObjetivo;
                 } else {
                     Symbol miembro = s.resuelto;
-                    actual = new CampoAccess(actual, s.nombreCampo, Operandos.tipoDe(miembro),
+                    CampoAccess campo = new CampoAccess(actual, s.nombreCampo, Operandos.tipoDe(miembro),
                             miembro != null ? miembro.getTipoNombre() : null,
                             miembro != null ? miembro.getDimensiones() : 0);
+                    if (ctx instanceof IntermediateCodeGenerator gen2) {
+                        campo.setOffset(gen2.offsetCampo(actual.getTipoNombre(), s.nombreCampo));
+                    }
+                    actual = campo;
                 }
             } else if (s.tipo == Sufijo.Tipo.INDICE) {
                 MemoryAccess indice = ((Expresion) s.indice).traducir(ctx);
@@ -165,8 +170,8 @@ public class AccessNode extends Expresion {
 
     private MemoryAccess traducirNativa(CodigoContexto ctx, String nombre, List<MemoryAccess> argumentos) {
         if (nombre.equals("leer") || nombre.equals("readln")) {
-            MemoryAccess temp = Operandos.temporal(ctx, "int");
-            ctx.agregar(new Leer3D(temp, "%d", true));
+            MemoryAccess temp = Operandos.temporal(ctx, "double");
+            ctx.agregar(new Leer3D(temp, "%lf", true));
             return temp;
         }
         ctx.agregar(Impresion.print(ctx, argumentos));
@@ -179,6 +184,7 @@ public class AccessNode extends Expresion {
             ctx.registrarError(getLine(), getColumn(), "Variable no declarada: '" + nombre + "'");
             return null;
         }
+        baseResuelto = actual;
 
         String metodoPendiente = null;
         Symbol contenedorPendiente = null;

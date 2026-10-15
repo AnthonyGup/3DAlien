@@ -58,4 +58,16 @@ public class SymbolTable {
         }
         return simbolos;
     }
+
+    public List<Symbol> todosLosSimbolos() {
+        return new ArrayList<>(registro);
+    }
+
+    public List<Symbol> listarGlobales() {
+        List<Symbol> resultado = new ArrayList<>();
+        if (!scopes.isEmpty()) {
+            resultado.addAll(scopes.get(0).getTodos());
+        }
+        return resultado;
+    }
 }

@@ -10,12 +10,28 @@ public class Llamada3D extends Cuarteta {
     private final String funcion;
     private final List<MemoryAccess> argumentos;
     private final MemoryAccess destino;
+    private int callerFrameSize = -1;
+    private boolean usuario = false;
+    private boolean tieneSelf = false;
+    private boolean retornaValor = false;
 
     public Llamada3D(String funcion, List<MemoryAccess> argumentos, MemoryAccess destino) {
         this.funcion = funcion;
         this.argumentos = argumentos == null ? new ArrayList<>() : argumentos;
         this.destino = destino;
+        this.retornaValor = destino != null;
     }
+
+    public void setCallerFrameSize(int callerFrameSize) { this.callerFrameSize = callerFrameSize; }
+    public int getCallerFrameSize() { return callerFrameSize; }
+
+    public void setUsuario(boolean usuario) { this.usuario = usuario; }
+    public boolean isUsuario() { return usuario; }
+
+    public void setTieneSelf(boolean tieneSelf) { this.tieneSelf = tieneSelf; }
+    public boolean isTieneSelf() { return tieneSelf; }
+
+    public boolean isRetornaValor() { return retornaValor; }
 
     public String getFuncion() {
         return funcion;

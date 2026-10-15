@@ -15,6 +15,8 @@ public final class Impresion {
     public static Imprimir3D print(CodigoContexto ctx, List<MemoryAccess> argumentos) {
         StringBuilder formato = new StringBuilder();
         List<String> partes = new ArrayList<>();
+        List<MemoryAccess> operandos = new ArrayList<>();
+        List<String> especificadores = new ArrayList<>();
         for (MemoryAccess arg : argumentos) {
             if (arg instanceof Literal3D literal && literal.getTipo() == Type.STRING) {
                 String texto = literal.getTexto();
@@ -25,27 +27,34 @@ public final class Impresion {
             }
             Type tipo = Operandos.tipoOperando(ctx, arg);
             String textoArg = Operandos.texto(arg);
+            String especificador;
             if (tipo == Type.BOOL) {
-                formato.append("%s");
+                especificador = "%s";
                 partes.add("(" + textoArg + " ? \"true\" : \"false\")");
             } else if (tipo == Type.STRING) {
-                formato.append("%s");
+                especificador = "%s";
                 partes.add(textoArg);
             } else if (tipo == Type.CHAR) {
-                formato.append("%c");
+                especificador = "%c";
                 partes.add(textoArg);
             } else if (tipo == Type.FLOAT) {
-                formato.append("%g");
+                especificador = "%g";
                 partes.add(textoArg);
             } else if (tipo == Type.STRUCT || tipo == Type.CLASS) {
-                formato.append("%p");
+                especificador = "%p";
                 partes.add(textoArg);
             } else {
-                formato.append("%d");
+                especificador = "%d";
                 partes.add(textoArg);
             }
+            formato.append(especificador);
+            operandos.add(arg);
+            especificadores.add(especificador);
         }
         String argsTexto = partes.isEmpty() ? null : String.join(", ", partes);
-        return new Imprimir3D("printf", "\"" + formato + "\"", argsTexto);
+        Imprimir3D imp = new Imprimir3D("printf", "\"" + formato + "\"", argsTexto);
+        imp.setOperandos(operandos);
+        imp.setEspecificadores(especificadores);
+        return imp;
     }
 }

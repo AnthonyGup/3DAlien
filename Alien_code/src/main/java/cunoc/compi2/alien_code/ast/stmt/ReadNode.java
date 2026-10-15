@@ -1,7 +1,9 @@
 package cunoc.compi2.alien_code.ast.stmt;
 import cunoc.compi2.alien_code.ast.Sentencia;
 import cunoc.compi2.alien_code.ast.Type;
+import cunoc.compi2.alien_code.c3d.access.Literal3D;
 import cunoc.compi2.alien_code.c3d.access.MemoryAccess;
+import cunoc.compi2.alien_code.c3d.cuartetas.Asignacion3D;
 import cunoc.compi2.alien_code.c3d.cuartetas.Leer3D;
 import cunoc.compi2.alien_code.ir.CodigoContexto;
 import cunoc.compi2.alien_code.ast.expr.AccessNode;
@@ -34,6 +36,7 @@ public class ReadNode extends Sentencia {
         MemoryAccess target = destino.toLvalue(ctx);
         Type tipo = target.getTipo();
         if (tipo == Type.STRING) {
+            ctx.agregar(new Asignacion3D(target, new Literal3D("malloc(256)", Type.STRING)));
             ctx.agregar(new Leer3D(target, "%s", false));
         } else if (tipo == Type.CHAR) {
             ctx.agregar(new Leer3D(target, " %c", true));

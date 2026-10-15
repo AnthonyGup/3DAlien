@@ -216,7 +216,7 @@ IMPORT      : 'import';
 ESTO        : 'esto';
 SERIES      : 'series';
 NOVUS       : 'novus';
-FINIS       : 'finis';
+FINIS       : [fF][iI][nN][iI][sS];
 
 SI          : 'si';
 ALITER      : 'aliter';

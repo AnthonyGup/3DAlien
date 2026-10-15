@@ -41,6 +41,7 @@ public final class TypeCompat {
     // true si dos tipos se pueden comparar con < o >
     public static boolean sonOrdenables(Type izq, Type der) {
         if (izq == null || der == null) return true;
-        return esNumerico(izq) && esNumerico(der);
+        java.util.function.Predicate<Type> ordenable = t -> esNumerico(t) || t == Type.CHAR;
+        return ordenable.test(izq) && ordenable.test(der);
     }
 }

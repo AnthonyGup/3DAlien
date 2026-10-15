@@ -82,7 +82,7 @@ public class BinaryOpNode extends Expresion {
         }
         if (tipo == Type.CHAR) {
             MemoryAccess t = Operandos.temporal(ctx, "char*");
-            ctx.agregar(new Llamada3D("strd", List.of(valor), t));
+            ctx.agregar(new Llamada3D("strc", List.of(valor), t));
             return t;
         }
         return valor;

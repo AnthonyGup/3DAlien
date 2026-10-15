@@ -81,7 +81,7 @@ public class PigLatinASTBuilder extends PigLatinBaseVisitor<Node> {
         if (ctx.NOVUS() != null) {
             String className = ctx.IDENTIFICADOR(1).getText();
             NewObjectNode initializer = new NewObjectNode(className, argumentsFrom(ctx.argumentos()), line(ctx), column(ctx));
-            return new VariableDeclNode(name, Type.STRUCT, className, initializer, line(ctx), column(ctx));
+            return new VariableDeclNode(name, Type.CLASS, className, initializer, line(ctx), column(ctx));
         }
         if (ctx.literalStructura() != null) {
             String className = ctx.IDENTIFICADOR(1).getText();

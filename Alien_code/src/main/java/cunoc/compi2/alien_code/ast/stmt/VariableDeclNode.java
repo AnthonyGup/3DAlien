@@ -22,6 +22,7 @@ public class VariableDeclNode extends Sentencia {
     public Type tipoElemento;
     public int dimensiones = 1;
     public Node inicial;
+    private Symbol simboloResuelto;
     private final int line;
     private final int column;
 
@@ -47,7 +48,9 @@ public class VariableDeclNode extends Sentencia {
             return;
         }
         MemoryAccess value = ((Expresion) inicial).traducir(ctx);
-        MemoryAccess target = Operandos.nombre(ctx, nombre, ctx.resolverSimbolo(nombre));
+        MemoryAccess target = simboloResuelto != null
+                ? Operandos.nombre(ctx, nombre, simboloResuelto)
+                : Operandos.nombre(ctx, nombre, ctx.resolverSimbolo(nombre));
         if (value instanceof Literal3D literal) {
             value = Operandos.literalBraces(target, literal);
         }
@@ -114,6 +117,7 @@ public class VariableDeclNode extends Sentencia {
         if (!ctx.definir(simbolo)) {
             ctx.registrarError(getLine(), getColumn(), "La variable '" + nombre + "' ya fue declarada");
         }
+        simboloResuelto = simbolo;
         return tipo;
     }
 }

@@ -24,6 +24,8 @@ public class Symbol {
     private List<Type> tiposParametros = new ArrayList<>();
     private List<List<Type>> firmas = new ArrayList<>();
     private List<List<Type>> firmasConstructores = new ArrayList<>();
+    private int offset = -1;
+    private boolean offsetGlobal = false;
 
    
 
@@ -61,6 +63,12 @@ public class Symbol {
 
     public Scope getMiembros() { return miembros; }
     public void setMiembros(Scope miembros) { this.miembros = miembros; }
+
+    public int getOffset() { return offset; }
+    public void setOffset(int offset) { this.offset = offset; }
+
+    public boolean isOffsetGlobal() { return offsetGlobal; }
+    public void setOffsetGlobal(boolean offsetGlobal) { this.offsetGlobal = offsetGlobal; }
 
     public List<Type> getTiposParametros() { return tiposParametros; }
 

@@ -19,7 +19,11 @@ public class TemporalAccess extends MemoryAccess {
 
     @Override
     public void toCCode(StringBuilder sb) {
-        sb.append('t').append(numero);
+        if (getOffset() >= 0) {
+            sb.append("Stack[(int)(P + ").append(getOffset()).append(")]");
+        } else {
+            sb.append('t').append(numero);
+        }
     }
 
     @Override

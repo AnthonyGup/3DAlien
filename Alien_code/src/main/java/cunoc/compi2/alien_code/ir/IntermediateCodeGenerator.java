@@ -2,16 +2,23 @@ package cunoc.compi2.alien_code.ir;
 
 import cunoc.compi2.alien_code.ast.Type;
 import cunoc.compi2.alien_code.c3d.cuartetas.Cuarteta;
+import cunoc.compi2.alien_code.c3d.cuartetas.FinFuncion3D;
+import cunoc.compi2.alien_code.c3d.cuartetas.InicioFuncion3D;
+import cunoc.compi2.alien_code.c3d.cuartetas.Llamada3D;
 import cunoc.compi2.alien_code.errors.ErrorListener;
 import cunoc.compi2.alien_code.semantic.Symbol;
 import cunoc.compi2.alien_code.semantic.SymbolTable;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public class IntermediateCodeGenerator implements CodigoContexto {
     private final List<Cuarteta> instrucciones;
@@ -22,6 +29,33 @@ public class IntermediateCodeGenerator implements CodigoContexto {
     private int labelCounter;
     private final Deque<InfoClase> pilaClases = new ArrayDeque<>();
     private Map<String, Symbol> simbolosPlano;
+
+    private final Set<Symbol> globales = Collections.newSetFromMap(new IdentityHashMap<>());
+    private final Map<Symbol, Integer> offsetsGlobales = new IdentityHashMap<>();
+    private final Map<String, Symbol> tiposGlobales = new HashMap<>();
+    private final Map<String, Map<String, Integer>> camposPorTipo = new HashMap<>();
+    private int siguienteGlobal = 0;
+    private final Deque<Marco> marcos = new ArrayDeque<>();
+    private final Map<String, Marco> marcosPorFuncion = new LinkedHashMap<>();
+    private final Map<Llamada3D, Marco> llamadasPendientes = new IdentityHashMap<>();
+    private boolean layoutFinalizado = false;
+    private int totalGlobales = -1;
+
+    public static final class Marco {
+        public final String nombre;
+        public final boolean esFuncion;
+        public boolean tieneSelf = false;
+        public final Map<String, Integer> parametros = new LinkedHashMap<>();
+        public final Map<Symbol, Integer> locales = new IdentityHashMap<>();
+        public final Map<Integer, Integer> temporales = new HashMap<>();
+        public int alto = 3;
+        public int tamano = -1;
+
+        Marco(String nombre, boolean esFuncion) {
+            this.nombre = nombre;
+            this.esFuncion = esFuncion;
+        }
+    }
 
     public IntermediateCodeGenerator(ErrorListener errorListener) {
         this(errorListener, null);
@@ -34,10 +68,139 @@ public class IntermediateCodeGenerator implements CodigoContexto {
         this.tabla = tabla;
         this.tempCounter = 0;
         this.labelCounter = 0;
+        inicializarGlobales();
     }
 
     public List<Cuarteta> getInstrucciones() {
+        finalizarLayout();
         return instrucciones;
+    }
+
+    private void inicializarGlobales() {
+        marcos.push(new Marco("<main>", false));
+        if (tabla == null) {
+            return;
+        }
+        for (Symbol s : tabla.listarGlobales()) {
+            if (s.getKind() == Symbol.Kind.VARIABLE && !s.isField()) {
+                globales.add(s);
+            } else if (s.getKind() == Symbol.Kind.CLASE || s.getKind() == Symbol.Kind.ESTRUCTURA) {
+                tiposGlobales.put(s.getName(), s);
+            }
+        }
+    }
+
+    public int offsetDe(Symbol s) {
+        if (s == null) {
+            return -1;
+        }
+        if (s.isField()) {
+            return -1;
+        }
+        Marco m = marcos.peek();
+        if (s.isParameter()) {
+            Integer p = m.parametros.get(s.getName());
+            if (p != null) {
+                m.locales.put(s, p);
+                return p;
+            }
+        }
+        Integer local = m.locales.get(s);
+        if (local != null) {
+            return local;
+        }
+        if (globales.contains(s)) {
+            Integer g = offsetsGlobales.get(s);
+            if (g == null) {
+                g = siguienteGlobal++;
+                offsetsGlobales.put(s, g);
+            }
+            s.setOffset(g);
+            s.setOffsetGlobal(true);
+            return g;
+        }
+        int off = m.alto++;
+        m.locales.put(s, off);
+        s.setOffset(off);
+        return off;
+    }
+
+    public int offsetTemporal(int numero) {
+        Marco m = marcos.peek();
+        Integer o = m.temporales.get(numero);
+        if (o == null) {
+            o = m.alto++;
+            m.temporales.put(numero, o);
+        }
+        return o;
+    }
+
+    public int offsetCampo(String tipoNombre, String campo) {
+        if (tipoNombre == null) {
+            return -1;
+        }
+        Map<String, Integer> mapa = camposPorTipo.computeIfAbsent(tipoNombre, k -> {
+            Map<String, Integer> mm = new LinkedHashMap<>();
+            Symbol tipo = tiposGlobales.get(k);
+            int i = 0;
+            if (tipo != null && tipo.getMiembros() != null) {
+                for (Symbol f : tipo.getMiembros().getTodos()) {
+                    if (f.getKind() == Symbol.Kind.VARIABLE) {
+                        mm.put(f.getName(), i++);
+                    }
+                }
+            }
+            return mm;
+        });
+        Integer o = mapa.get(campo);
+        return o == null ? -1 : o;
+    }
+
+    public int cuentaCampos(String tipoNombre) {
+        if (tipoNombre == null) {
+            return 0;
+        }
+        offsetCampo(tipoNombre, "");
+        Map<String, Integer> mapa = camposPorTipo.get(tipoNombre);
+        return mapa == null ? 0 : mapa.size();
+    }
+
+    public int getTotalGlobales() {
+        finalizarLayout();
+        return totalGlobales;
+    }
+
+    public Marco getMarcoActual() {
+        return marcos.peek();
+    }
+
+    private void finalizarLayout() {
+        if (layoutFinalizado) {
+            return;
+        }
+        layoutFinalizado = true;
+        for (Marco m : marcos) {
+            if (m.tamano < 0) {
+                m.tamano = m.alto;
+            }
+        }
+        for (Marco m : marcosPorFuncion.values()) {
+            if (m.tamano < 0) {
+                m.tamano = m.alto;
+            }
+        }
+        for (Map.Entry<Llamada3D, Marco> e : llamadasPendientes.entrySet()) {
+            Llamada3D lam = e.getKey();
+            Marco m = e.getValue();
+            boolean usuario = marcosPorFuncion.containsKey(lam.getFuncion());
+            lam.setUsuario(usuario);
+            if (usuario) {
+                lam.setCallerFrameSize(m.tamano);
+                Marco callee = marcosPorFuncion.get(lam.getFuncion());
+                lam.setTieneSelf(callee != null && callee.tieneSelf);
+            }
+        }
+        totalGlobales = siguienteGlobal;
     }
 
     public Map<Integer, String> getTiposTemporales() {
@@ -56,7 +219,48 @@ public class IntermediateCodeGenerator implements CodigoContexto {
 
     @Override
     public void agregar(Cuarteta cuarteta) {
+        if (cuarteta instanceof InicioFuncion3D ini) {
+            Marco m = new Marco(ini.getNombre(), true);
+            String desc = ini.getDescripcion();
+            int slot = 3;
+            if (desc != null && !desc.isBlank()) {
+                for (String p : desc.split(";")) {
+                    String nom = p.trim();
+                    int idx = nom.indexOf(':');
+                    if (idx > 0) {
+                        nom = nom.substring(0, idx).trim();
+                    }
+                    if (nom.isEmpty()) {
+                        continue;
+                    }
+                    if (nom.equals("self")) {
+                        m.tieneSelf = true;
+                        m.parametros.put("self", 2);
+                    } else {
+                        m.parametros.put(nom, slot++);
+                    }
+                }
+            }
+            m.alto = Math.max(3, slot);
+            marcos.push(m);
+            marcosPorFuncion.put(ini.getNombre(), m);
+        }
         instrucciones.add(cuarteta);
+        if (cuarteta instanceof Llamada3D lam) {
+            llamadasPendientes.put(lam, marcos.peek());
+        }
+        if (cuarteta instanceof cunoc.compi2.alien_code.c3d.cuartetas.DeclararArreglo3D arr) {
+            Symbol s = resolverSimbolo(arr.getNombre());
+            if (s != null && s.getKind() == Symbol.Kind.VARIABLE) {
+                offsetDe(s);
+            }
+        }
+        if (cuarteta instanceof FinFuncion3D) {
+            if (marcos.size() > 1) {
+                Marco m = marcos.pop();
+                m.tamano = m.alto;
+            }
+        }
     }
 
     @Override
@@ -78,7 +282,10 @@ public class IntermediateCodeGenerator implements CodigoContexto {
         }
         if (simbolosPlano == null && tabla != null) {
             simbolosPlano = new HashMap<>();
-            for (Symbol s : tabla.listarSimbolos()) {
+            for (Symbol s : tabla.todosLosSimbolos()) {
+                if (s.getKind() == Symbol.Kind.METODO || s.getKind() == Symbol.Kind.CONSTRUCTOR) {
+                    continue;
+                }
                 simbolosPlano.putIfAbsent(s.getName(), s);
             }
         }

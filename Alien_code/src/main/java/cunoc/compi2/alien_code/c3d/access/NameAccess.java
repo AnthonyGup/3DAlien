@@ -8,6 +8,7 @@ import java.util.List;
 public class NameAccess extends MemoryAccess {
     private final String nombre;
     private final boolean autoreferencia;
+    private boolean global = false;
 
     public NameAccess(String nombre, Type tipo, String tipoNombre, boolean autoreferencia, int dimensiones) {
         super(tipo, tipoNombre, dimensiones);
@@ -23,10 +24,24 @@ public class NameAccess extends MemoryAccess {
         return autoreferencia;
     }
 
+    public boolean isGlobal() {
+        return global;
+    }
+
+    public void setGlobal(boolean global) {
+        this.global = global;
+    }
+
     @Override
     public void toCCode(StringBuilder sb) {
         if (autoreferencia) {
-            sb.append("self->").append(nombre);
+            sb.append("Heap[(int)(Stack[(int)(P + 2)]) + ").append(Math.max(0, getOffset())).append("]");
+        } else if (getOffset() >= 0) {
+            if (global) {
+                sb.append("Stack[(int)").append(getOffset()).append("]");
+            } else {
+                sb.append("Stack[(int)(P + ").append(getOffset()).append(")]");
+            }
         } else {
             sb.append(nombre);
         }

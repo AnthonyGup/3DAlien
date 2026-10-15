@@ -52,14 +52,14 @@ public class ArrayDeclNode extends Sentencia {
                 ? tipoNombre : tipo.name();
         ctx.agregar(new DeclararArreglo3D(nombre, tipoTexto, dimsTexto));
         if (iniciales != null) {
-            MemoryAccess base = new NameAccess(nombre, tipo, tipoNombre, false, dimensiones);
+            MemoryAccess base = Operandos.nombre(ctx, nombre, ctx.resolverSimbolo(nombre));
             for (int i = 0; i < iniciales.size(); i++) {
-                MemoryAccess val = ((Expresion) iniciales.get(i)).traducir(ctx);
-                if (val instanceof Literal3D literal) {
-                    val = Operandos.literalBraces(base, literal);
-                }
                 MemoryAccess indice = new IndiceAccess(base, new Literal3D(String.valueOf(i), Type.INT),
                         tipo, tipoNombre, Math.max(0, dimensiones - 1));
+                MemoryAccess val = ((Expresion) iniciales.get(i)).traducir(ctx);
+                if (val instanceof Literal3D literal) {
+                    val = Operandos.literalBraces(indice, literal);
+                }
                 ctx.agregar(new Asignacion3D(indice, val));
             }
         }

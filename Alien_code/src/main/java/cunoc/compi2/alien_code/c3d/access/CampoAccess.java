@@ -24,8 +24,9 @@ public class CampoAccess extends MemoryAccess {
 
     @Override
     public void toCCode(StringBuilder sb) {
+        sb.append("Heap[(int)(");
         base.toCCode(sb);
-        sb.append("->").append(campo);
+        sb.append(") + ").append(Math.max(0, getOffset())).append(']');
     }
 
     @Override

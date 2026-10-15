@@ -25,10 +25,11 @@ public class IndiceAccess extends MemoryAccess {
 
     @Override
     public void toCCode(StringBuilder sb) {
+        sb.append("Heap[(int)(");
         base.toCCode(sb);
-        sb.append('[');
+        sb.append(" + ");
         indice.toCCode(sb);
-        sb.append(']');
+        sb.append(")]");
     }
 
     @Override

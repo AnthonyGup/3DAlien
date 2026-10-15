@@ -48,6 +48,10 @@ public class SemanticAnalyzer {
                 false, false, false, 0);
             println.setNativa(true);
             contexto.definir(println);
+            Symbol print = new Symbol("print", Type.VOID, Symbol.Kind.FUNCION,
+                false, false, false, 0);
+            print.setNativa(true);
+            contexto.definir(print);
         }
     }
 

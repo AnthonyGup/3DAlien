@@ -143,15 +143,27 @@ public class VentanaPrincipal extends JFrame {
             return;
         }
 
-        File mainPig = buscarMainPig(carpetaProyecto);
-        if (mainPig == null) {
-            log.agregarError("No se encontró ningún archivo .pig con sección principal (MAIOR>).");
+        EditorPanel editor = mainPanel.getEditorTabs().getEditorSeleccionado();
+        if (editor == null || editor.getArchivo() == null) {
+            log.agregarError("No hay archivo abierto en el editor.");
             return;
         }
 
-        log.agregarInfo("> Compilando main: " + mainPig.getName());
+        File archivo = editor.getArchivo();
+        if (!archivo.getName().toLowerCase().endsWith(".pig")) {
+            log.agregarError("El archivo activo no es un .pig (" + archivo.getName() + ").");
+            return;
+        }
+
+        String contenido = editor.getText();
+        if (contenido == null || !contenido.contains("MAIOR>")) {
+            log.agregarError("El archivo .pig activo no tiene sección principal (MAIOR>).");
+            return;
+        }
+
+        log.agregarInfo("> Compilando archivo activo: " + archivo.getName());
         VerificadorSintactico verificador = new VerificadorSintactico();
-        VerificadorSintactico.Resultado resultado = verificador.verificar(leer(mainPig), mainPig);
+        VerificadorSintactico.Resultado resultado = verificador.verificar(contenido, archivo);
 
         if (!resultado.extensionValida) {
             log.agregarError("Extensión no reconocida.");
@@ -176,7 +188,7 @@ public class VentanaPrincipal extends JFrame {
         }
 
         log.agregarExito("Sin errores sintácticos.");
-        ejecutarPipelineSemantico(mainPig, log, ventanaErrores);
+        ejecutarPipelineSemantico(archivo, log, ventanaErrores);
     }
 
     private File buscarMainPig(File directorio) {
@@ -344,12 +356,16 @@ public class VentanaPrincipal extends JFrame {
 
     private File resolverImport(String rutaCompleta) {
         if (carpetaProyecto == null) return null;
-        String ruta = rutaCompleta.replace('.', File.separatorChar);
-        File base = new File(carpetaProyecto, ruta);
-        File archivoY = new File(base.getPath() + ".y");
-        if (archivoY.isFile()) return archivoY;
-        File archivoZ = new File(base.getPath() + ".z");
-        if (archivoZ.isFile()) return archivoZ;
+        String[] partes = rutaCompleta.split("\\.");
+        if (partes.length < 2) return null;
+        String ext = partes[partes.length - 1];
+        StringBuilder path = new StringBuilder();
+        for (int i = 0; i < partes.length - 1; i++) {
+            if (i > 0) path.append(File.separatorChar);
+            path.append(partes[i]);
+        }
+        File archivo = new File(carpetaProyecto, path.toString() + "." + ext);
+        if (archivo.isFile()) return archivo;
         return null;
     }
 

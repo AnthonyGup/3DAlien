@@ -19,7 +19,11 @@ public final class Operandos {
     public static TemporalAccess temporal(CodigoContexto ctx, String ctype) {
         int numero = ctx.nuevoIndiceTemporal();
         ctx.registrarTipoTemporal(numero, ctype);
-        return new TemporalAccess(numero, TiposC.typeOfCType(ctype));
+        TemporalAccess acceso = new TemporalAccess(numero, TiposC.typeOfCType(ctype));
+        if (ctx instanceof IntermediateCodeGenerator gen) {
+            acceso.setOffset(gen.offsetTemporal(numero));
+        }
+        return acceso;
     }
 
     public static LabelAccess etiqueta(CodigoContexto ctx) {
@@ -41,8 +45,18 @@ public final class Operandos {
                 }
             }
         }
-        return new NameAccess(nombre, tipoDe(simbolo), simbolo != null ? simbolo.getTipoNombre() : null,
+        NameAccess acceso = new NameAccess(nombre, tipoDe(simbolo), simbolo != null ? simbolo.getTipoNombre() : null,
                 autoref, simbolo != null ? simbolo.getDimensiones() : 0);
+        if (ctx instanceof IntermediateCodeGenerator gen) {
+            if (autoref) {
+                acceso.setOffset(gen.offsetCampo(gen.currentClassName(), nombre));
+            } else if (simbolo != null && simbolo.getKind() == Symbol.Kind.VARIABLE
+                    && !simbolo.isField()) {
+                acceso.setOffset(gen.offsetDe(simbolo));
+                acceso.setGlobal(simbolo.isOffsetGlobal());
+            }
+        }
+        return acceso;
     }
 
     public static Type tipoDe(Symbol simbolo) {
