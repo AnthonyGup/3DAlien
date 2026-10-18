@@ -1,1 +1,7 @@
 /Alien_code/target/
+
+# Artefactos generados (no se versionan)
+*.generated.c
+*.exe
+*.class
+

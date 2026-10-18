@@ -27,6 +27,15 @@
             <artifactId>rsyntaxtextarea</artifactId>
             <version>3.3.4</version>
         </dependency>
+
+        <!-- RARS 1.6 (simulador RISC-V embebido) - no esta en Maven Central -->
+        <dependency>
+            <groupId>rars</groupId>
+            <artifactId>rars</artifactId>
+            <version>1.6</version>
+            <scope>system</scope>
+            <systemPath>${project.basedir}/libs/rars.jar</systemPath>
+        </dependency>
     </dependencies>
 
     <build>
