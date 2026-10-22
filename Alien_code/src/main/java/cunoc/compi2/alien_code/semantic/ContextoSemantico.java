@@ -43,4 +43,20 @@ public interface ContextoSemantico {
     void popClaseActual();
 
     Scope ambitoDeClaseActual();
+
+    void entrarClase(Symbol clase);
+
+    void salirClase();
+
+    Symbol claseActual();
+
+    void entrarRutina(boolean constructor);
+
+    void salirRutina();
+
+    boolean enRutina();
+
+    boolean enConstructor();
+
+    void ingresarPrograma(String archivo);
 }

@@ -86,6 +86,19 @@ public class AssignmentNode extends Sentencia {
         }
         Type tipoDestino = ctx.evaluar(destino);
         Type tipoValor = ctx.evaluar(valor);
+        if (tipoDestino == Type.CLASS && tipoValor == Type.CLASS) {
+            Symbol destinoSimbolo = AccessNode.resolverSimbolo(ctx, destino);
+            Symbol valorSimbolo = valor instanceof AccessNode acceso
+                ? AccessNode.resolverSimbolo(ctx, acceso) : null;
+            String destinoNombre = destinoSimbolo != null ? destinoSimbolo.getTipoNombre() : null;
+            String valorNombre = valorSimbolo != null ? valorSimbolo.getTipoNombre() : null;
+            if (destinoNombre != null && valorNombre != null
+                    && !cunoc.compi2.alien_code.semantic.POO.esSubtipo(ctx, valorNombre, destinoNombre)) {
+                ctx.registrarError(getLine(), getColumn(),
+                    "No se puede asignar '" + valorNombre + "' a '" + destinoNombre + "'");
+            }
+            return tipoDestino;
+        }
         if (!TypeCompat.esAsignable(tipoDestino, tipoValor)) {
             ctx.registrarError(getLine(), getColumn(),
                 "No se puede asignar " + tipoValor + " a " + tipoDestino);

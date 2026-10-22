@@ -12,6 +12,7 @@ import java.util.List;
 public class ProgramNode extends Sentencia {
     public List<Node> declarations;
     public String sourceLanguage;
+    public String archivo;
     private int line;
     private int column;
 

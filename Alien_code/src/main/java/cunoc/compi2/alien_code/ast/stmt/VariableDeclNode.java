@@ -11,6 +11,7 @@ import cunoc.compi2.alien_code.ir.Operandos;
 import cunoc.compi2.alien_code.semantic.ContextoSemantico;
 import cunoc.compi2.alien_code.ast.expr.AccessNode;
 import cunoc.compi2.alien_code.ast.expr.NewArrayNode;
+import cunoc.compi2.alien_code.ast.expr.NewObjectNode;
 import cunoc.compi2.alien_code.ast.expr.StructLiteralNode;
 import cunoc.compi2.alien_code.semantic.Symbol;
 import cunoc.compi2.alien_code.semantic.TypeCompat;
@@ -22,6 +23,7 @@ public class VariableDeclNode extends Sentencia {
     public Type tipoElemento;
     public int dimensiones = 1;
     public Node inicial;
+    public cunoc.compi2.alien_code.ast.decl.Visibilidad visibilidad = cunoc.compi2.alien_code.ast.decl.Visibilidad.DEFAULT;
     private Symbol simboloResuelto;
     private final int line;
     private final int column;
@@ -40,6 +42,17 @@ public class VariableDeclNode extends Sentencia {
 
     @Override
     public int getColumn() { return column; }
+
+    private String nombreTipoLegible() {
+        switch (tipo) {
+            case INT: return "numerus";
+            case FLOAT: return "decimalis";
+            case STRING: return "textum";
+            case CHAR: return "littera";
+            case BOOL: return "bool";
+            default: return tipo != null ? tipo.toString().toLowerCase() : "?";
+        }
+    }
 
 
     @Override
@@ -61,12 +74,34 @@ public class VariableDeclNode extends Sentencia {
         if (tipo == Type.STRUCT || tipo == Type.CLASS) {
             Symbol tipoSimbolo = ctx.resolver(tipoNombre);
             if (tipoSimbolo == null) {
+                tipoSimbolo = cunoc.compi2.alien_code.semantic.POO.buscarClase(ctx, tipoNombre);
+            }
+            if (tipoSimbolo == null) {
                 ctx.registrarError(getLine(), getColumn(),
-                    "Tipo desconocido '" + tipoNombre + "' (¿falta un import?)");
+                    "La clase '" + tipoNombre + "' no existe");
             } else if (inicial instanceof StructLiteralNode) {
                 ((StructLiteralNode) inicial).validarContra(tipoSimbolo, ctx);
+            } else if (inicial instanceof NewObjectNode nuevo) {
+                Type tipoInicial = ctx.evaluar(nuevo);
+                if (tipoInicial != null && tipo == Type.CLASS
+                        && !cunoc.compi2.alien_code.semantic.POO.esSubtipo(
+                            ctx, nuevo.nombreClase, tipoNombre)) {
+                    ctx.registrarError(getLine(), getColumn(),
+                        "'" + nuevo.nombreClase + "' no es '" + tipoNombre
+                        + "' ni hereda de ella");
+                }
             } else if (inicial != null) {
-                ctx.evaluar(inicial);
+                Type tipoInicial = ctx.evaluar(inicial);
+                if (tipoInicial == Type.CLASS || tipoInicial == Type.STRUCT) {
+                    Symbol fuente = inicial instanceof AccessNode acceso
+                        ? AccessNode.resolverSimbolo(ctx, acceso) : null;
+                    String origen = fuente != null ? fuente.getTipoNombre() : null;
+                    if (origen != null && tipo == Type.CLASS
+                            && !cunoc.compi2.alien_code.semantic.POO.esSubtipo(ctx, origen, tipoNombre)) {
+                        ctx.registrarError(getLine(), getColumn(),
+                            "No se puede asignar '" + origen + "' a '" + tipoNombre + "'");
+                    }
+                }
             }
         } else if (tipo == Type.ARRAY) {
             if (inicial instanceof NewArrayNode nuevo) {
@@ -106,7 +141,10 @@ public class VariableDeclNode extends Sentencia {
             }
         } else if (inicial != null) {
             Type tipoInicial = ctx.evaluar(inicial);
-            if (!TypeCompat.esAsignable(tipo, tipoInicial)) {
+            if (tipoInicial == Type.NULL && tipo != Type.CLASS && tipo != Type.STRUCT) {
+                ctx.registrarError(getLine(), getColumn(),
+                    "null no puede asignarse a '" + nombreTipoLegible() + "'");
+            } else if (!TypeCompat.esAsignable(tipo, tipoInicial)) {
                 ctx.registrarError(getLine(), getColumn(),
                     "No se puede asignar " + tipoInicial + " a variable de tipo " + tipo);
             }

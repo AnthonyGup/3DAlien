@@ -5,12 +5,14 @@ public class CompilerError {
     private final String message;
     private final int line;
     private final int column;
+    private final String archivo;
 
-    public CompilerError(ErrorType type, String message, int line, int column) {
+    public CompilerError(ErrorType type, String message, int line, int column, String archivo) {
         this.type = type;
         this.message = message;
         this.line = line;
         this.column = column;
+        this.archivo = archivo;
     }
 
     public String getMessage() {
@@ -25,8 +27,13 @@ public class CompilerError {
         return column;
     }
 
+    public String getArchivo() {
+        return archivo;
+    }
+
     @Override
     public String toString() {
-        return String.format("[%s] Línea %d, columna %d: %s", type, line, column, message);
+        String donde = archivo != null ? archivo + ": " : "";
+        return String.format("%s[%s] Línea %d, columna %d: %s", donde, type, line, column, message);
     }
 }

@@ -20,6 +20,8 @@ public class MethodDeclNode extends Sentencia {
     public String tipoRetornoNombre;
     public Type tipoRetornoElemento;
     public BlockNode cuerpo;
+    public Visibilidad visibilidad = Visibilidad.DEFAULT;
+    public boolean tieneOverride = false;
     private final int line;
     private final int column;
 
@@ -59,7 +61,9 @@ public class MethodDeclNode extends Sentencia {
         Type esperado = tipoRetorno == Type.ARRAY && tipoRetornoElemento != null
             ? tipoRetornoElemento : tipoRetorno;
         ctx.pushTipoRetorno(esperado);
+        ctx.entrarRutina(false);
         ctx.evaluar(cuerpo);
+        ctx.salirRutina();
         ctx.popTipoRetorno();
 
         ctx.salirAmbito();

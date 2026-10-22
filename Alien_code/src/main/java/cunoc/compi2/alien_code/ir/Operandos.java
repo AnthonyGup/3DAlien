@@ -40,6 +40,9 @@ public final class Operandos {
             Symbol claseActual = ctx.resolverSimbolo(ctx.currentClassName());
             if (claseActual != null && claseActual.getMiembros() != null) {
                 Symbol campoClase = claseActual.getMiembros().resolveLocal(nombre);
+                if (campoClase == null) {
+                    campoClase = cunoc.compi2.alien_code.semantic.POO.buscarAtributo(claseActual, nombre);
+                }
                 if (campoClase != null && campoClase == simbolo) {
                     autoref = true;
                 }

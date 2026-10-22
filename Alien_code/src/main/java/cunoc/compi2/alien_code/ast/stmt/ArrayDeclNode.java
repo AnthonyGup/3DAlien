@@ -25,6 +25,7 @@ public class ArrayDeclNode extends Sentencia {
     public Type tipo;
     public String tipoNombre;
     public List<Node> iniciales;
+    public cunoc.compi2.alien_code.ast.decl.Visibilidad visibilidad = cunoc.compi2.alien_code.ast.decl.Visibilidad.DEFAULT;
     private final int line;
     private final int column;
 
@@ -66,6 +67,17 @@ public class ArrayDeclNode extends Sentencia {
     }
     @Override
     public Type analizar(ContextoSemantico ctx) {
+        if (tipo == Type.STRUCT && tipoNombre != null) {
+            Symbol claseArr = cunoc.compi2.alien_code.semantic.POO.buscarClase(ctx, tipoNombre);
+            if (claseArr != null) {
+                tipo = Type.CLASS;
+            }
+        } else if (tipo == Type.CLASS && tipoNombre != null) {
+            Symbol claseArr = cunoc.compi2.alien_code.semantic.POO.buscarClase(ctx, tipoNombre);
+            if (claseArr == null) {
+                tipo = Type.STRUCT;
+            }
+        }
         if (iniciales != null && !iniciales.isEmpty()) {
             if (iniciales.size() != tamano) {
                 ctx.registrarError(getLine(), getColumn(),

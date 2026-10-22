@@ -81,6 +81,14 @@ public class PigLatinASTBuilder extends PigLatinBaseVisitor<Node> {
         if (ctx.NOVUS() != null) {
             String className = ctx.IDENTIFICADOR(1).getText();
             NewObjectNode initializer = new NewObjectNode(className, argumentsFrom(ctx.argumentos()), line(ctx), column(ctx));
+            String tipoDeclarado = ctx.IDENTIFICADOR().size() > 2 ? ctx.IDENTIFICADOR(2).getText() : null;
+            initializer.tipoDeclarado = tipoDeclarado;
+            return new VariableDeclNode(name, Type.CLASS, tipoDeclarado != null ? tipoDeclarado : className,
+                    initializer, line(ctx), column(ctx));
+        }
+        if (ctx.NULL() != null) {
+            String className = ctx.IDENTIFICADOR(1).getText();
+            LiteralNode initializer = new LiteralNode(LiteralNode.Clase.NULO, "null", line(ctx), column(ctx));
             return new VariableDeclNode(name, Type.CLASS, className, initializer, line(ctx), column(ctx));
         }
         if (ctx.literalStructura() != null) {
@@ -384,6 +392,9 @@ public class PigLatinASTBuilder extends PigLatinBaseVisitor<Node> {
         }
         if (ctx.FALSUS() != null) {
             return new LiteralNode(LiteralNode.Clase.BOOLEANO, "false", line(ctx), column(ctx));
+        }
+        if (ctx.NULL() != null) {
+            return new LiteralNode(LiteralNode.Clase.NULO, "null", line(ctx), column(ctx));
         }
         if (ctx.NOVUS() != null) {
             String className = ctx.IDENTIFICADOR().getText();

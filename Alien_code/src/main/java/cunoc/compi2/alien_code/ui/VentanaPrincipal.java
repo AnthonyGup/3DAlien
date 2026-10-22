@@ -306,7 +306,7 @@ public class VentanaPrincipal extends JFrame {
         }
         ventanaC3D.setDatos(filasC3D);
         codigoCActual = new CCodeGenerator().generate(instrucciones,
-                analizador.getSymbolTable(), generador.getTiposTemporales());
+                analizador.getSymbolTable(), generador.getTiposTemporales(), generador.getLayouts());
         log.agregarExito("C3D generado (" + numeroC3D + " instrucciones). Ver Reportes > Ver C3D.");
         log.agregarExito("Código C generado. Ver Reportes > Ver código C.");
     }

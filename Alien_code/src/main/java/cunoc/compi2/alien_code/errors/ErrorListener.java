@@ -11,7 +11,11 @@ public class ErrorListener {
     }
 
     public void addError(ErrorType type, String message, int line, int column) {
-        errors.add(new CompilerError(type, message, line, column));
+        errors.add(new CompilerError(type, message, line, column, null));
+    }
+
+    public void addError(ErrorType type, String message, int line, int column, String archivo) {
+        errors.add(new CompilerError(type, message, line, column, archivo));
     }
 
     public List<CompilerError> getErrors() {

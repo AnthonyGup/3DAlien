@@ -12,6 +12,8 @@ import java.util.List;
 
 public class ClassDeclNode extends Sentencia {
     public String nombre;
+    public String superclase;
+    public Visibilidad visibilidad = Visibilidad.DEFAULT;
     public List<VariableDeclNode> atributos;
     public List<ConstructorDeclNode> constructores;
     public List<MethodDeclNode> metodos;
@@ -37,7 +39,14 @@ public class ClassDeclNode extends Sentencia {
     @Override
     public void traducir(CodigoContexto ctx) {
         ctx.pushClassTranslation(nombre);
-        for (ConstructorDeclNode c : constructores) c.traducir(ctx);
+        if (ctx instanceof cunoc.compi2.alien_code.ir.IntermediateCodeGenerator gen) {
+            gen.setAtributosClase(atributos);
+        }
+        if (constructores.isEmpty()) {
+            ConstructorSupport.emitirConstructorSintetico(ctx, nombre);
+        } else {
+            for (ConstructorDeclNode c : constructores) c.traducir(ctx);
+        }
         for (MethodDeclNode m : metodos) m.traducir(ctx);
         ctx.popClassTranslation();
     }
@@ -55,9 +64,14 @@ public class ClassDeclNode extends Sentencia {
         }
 
         Symbol propio = ctx.resolver(nombre);
+        if (propio == null) {
+            return Type.VOID;
+        }
         ctx.pushClaseActual(propio.getMiembros());
+        ctx.entrarClase(propio);
         for (ConstructorDeclNode c : constructores) ctx.evaluar(c);
         for (MethodDeclNode m : metodos) ctx.evaluar(m);
+        ctx.salirClase();
         ctx.popClaseActual();
 
         return Type.VOID;

@@ -20,7 +20,13 @@ grammar Zetariano;
 // ── Programa: una sola clase pública por archivo ─────────────
 
 programa
-    : PUBLIC CLASS IDENTIFICADOR LLAVE_IZQ miembroClase* LLAVE_DER EOF
+    : visibilidad? CLASS IDENTIFICADOR (EXTENDS IDENTIFICADOR)? LLAVE_IZQ miembroClase* LLAVE_DER EOF
+    ;
+
+visibilidad
+    : PUBLIC
+    | PRIVATE
+    | PROTECTED
     ;
 
 miembroClase
@@ -30,15 +36,15 @@ miembroClase
     ;
 
 campoAtributo
-    : tipo arrayDims? IDENTIFICADOR (ASIGNACION expresion)? PUNTO_COMA
+    : visibilidad? tipo arrayDims? IDENTIFICADOR (ASIGNACION expresion)? PUNTO_COMA
     ;
 
 constructor
-    : PUBLIC IDENTIFICADOR PAREN_IZQ parametros? PAREN_DER bloque
+    : visibilidad? IDENTIFICADOR PAREN_IZQ parametros? PAREN_DER bloque
     ;
 
 metodo
-    : PUBLIC (VOID | tipo arrayDims?) IDENTIFICADOR PAREN_IZQ parametros? PAREN_DER bloque
+    : OVERRIDE? visibilidad? (VOID | tipo arrayDims?) IDENTIFICADOR PAREN_IZQ parametros? PAREN_DER bloque
     ;
 
 parametros
@@ -94,6 +100,7 @@ sentencia
     | whileClasico
     | doWhileClasico
     | retorno
+    | superLlamada
     | BREAK PUNTO_COMA
     | CONTINUE PUNTO_COMA
     | bloque                          // bloque anidado suelto
@@ -121,6 +128,10 @@ decremento
 
 retorno
     : RETURN expresion? PUNTO_COMA
+    ;
+
+superLlamada
+    : SUPER PAREN_IZQ argumentos? PAREN_DER PUNTO_COMA
     ;
 
 // ── Condicional (if / else if / else), llaves opcionales ─────
@@ -208,7 +219,12 @@ expresionUnaria
 // ── Accesos encadenados: variable, atributo, índice, llamada ─
 
 accesoVariable
-    : IDENTIFICADOR sufijoAcceso*
+    : baseAcceso sufijoAcceso*
+    ;
+
+baseAcceso
+    : IDENTIFICADOR
+    | THIS
     ;
 
 sufijoAcceso
@@ -246,8 +262,14 @@ literalArreglo
 
 // ── Palabras reservadas ──────────────────────────────────────
 
-CLASS    : 'class';
-PUBLIC   : 'public';
+CLASS     : 'class';
+PUBLIC    : 'public';
+PRIVATE   : 'private';
+PROTECTED : 'protected';
+EXTENDS   : 'extends';
+THIS      : 'this';
+SUPER     : 'super';
+OVERRIDE  : '@Override';
 VOID     : 'void';
 NEW      : 'new';
 NULL     : 'null';

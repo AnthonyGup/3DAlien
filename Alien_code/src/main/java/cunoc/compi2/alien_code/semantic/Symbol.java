@@ -1,6 +1,7 @@
 package cunoc.compi2.alien_code.semantic;
 
 import cunoc.compi2.alien_code.ast.Type;
+import cunoc.compi2.alien_code.ast.decl.Visibilidad;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -26,6 +27,12 @@ public class Symbol {
     private List<List<Type>> firmasConstructores = new ArrayList<>();
     private int offset = -1;
     private boolean offsetGlobal = false;
+    private Visibilidad visibilidad = Visibilidad.DEFAULT;
+    private String claseDuena;
+    private String nombreSuperclase;
+    private Symbol superclaseResuelta;
+    private boolean tieneOverride = false;
+    private final List<Symbol> constructores = new ArrayList<>();
 
    
 
@@ -75,6 +82,24 @@ public class Symbol {
     public List<List<Type>> getFirmas() { return firmas; }
 
     public List<List<Type>> getFirmasConstructores() { return firmasConstructores; }
+
+    public Visibilidad getVisibilidad() { return visibilidad; }
+    public void setVisibilidad(Visibilidad visibilidad) { this.visibilidad = visibilidad; }
+
+    public String getClaseDuena() { return claseDuena; }
+    public void setClaseDuena(String claseDuena) { this.claseDuena = claseDuena; }
+
+    public String getNombreSuperclase() { return nombreSuperclase; }
+    public void setNombreSuperclase(String nombreSuperclase) { this.nombreSuperclase = nombreSuperclase; }
+
+    public Symbol getSuperclaseResuelta() { return superclaseResuelta; }
+    public void setSuperclaseResuelta(Symbol superclaseResuelta) { this.superclaseResuelta = superclaseResuelta; }
+
+    public boolean tieneOverride() { return tieneOverride; }
+    public void setTieneOverride(boolean tieneOverride) { this.tieneOverride = tieneOverride; }
+
+    public List<Symbol> getConstructores() { return constructores; }
+    public void agregarConstructor(Symbol ctor) { constructores.add(ctor); }
 
     public static Symbol variable(String nombre, Type tipoDeclarado, Type tipoElemento,
             String tipoNombre, int dimensiones, boolean isParameter, boolean isField,

@@ -15,6 +15,10 @@ public class ContextoSemanticoImpl implements ContextoSemantico {
     private int switchDepth;
     private final Deque<Type> pilaRetornos = new LinkedList<>();
     private final Deque<Scope> pilaClases = new LinkedList<>();
+    private final Deque<Symbol> pilaClaseSymbol = new LinkedList<>();
+    private int rutinaDepth = 0;
+    private final Deque<Boolean> pilaConstructor = new LinkedList<>();
+    private String archivoActual;
 
     public ContextoSemanticoImpl(SymbolTable symbolTable, ErrorListener errorListener) {
         this.symbolTable = symbolTable;
@@ -52,7 +56,7 @@ public class ContextoSemanticoImpl implements ContextoSemantico {
 
     @Override
     public void registrarError(int linea, int columna, String mensaje) {
-        errorListener.addError(ErrorType.SEMANTICO, mensaje, linea, columna);
+        errorListener.addError(ErrorType.SEMANTICO, mensaje, linea, columna, archivoActual);
     }
 
     @Override
@@ -127,5 +131,49 @@ public class ContextoSemanticoImpl implements ContextoSemantico {
     @Override
     public Scope ambitoDeClaseActual() {
         return pilaClases.isEmpty() ? null : pilaClases.peek();
+    }
+
+    @Override
+    public void entrarClase(Symbol clase) {
+        pilaClaseSymbol.push(clase);
+    }
+
+    @Override
+    public void salirClase() {
+        if (!pilaClaseSymbol.isEmpty()) {
+            pilaClaseSymbol.pop();
+        }
+    }
+
+    @Override
+    public Symbol claseActual() {
+        return pilaClaseSymbol.isEmpty() ? null : pilaClaseSymbol.peek();
+    }
+
+    @Override
+    public void entrarRutina(boolean constructor) {
+        rutinaDepth++;
+        pilaConstructor.push(constructor);
+    }
+
+    @Override
+    public void salirRutina() {
+        if (rutinaDepth > 0) rutinaDepth--;
+        if (!pilaConstructor.isEmpty()) pilaConstructor.pop();
+    }
+
+    @Override
+    public boolean enRutina() {
+        return rutinaDepth > 0;
+    }
+
+    @Override
+    public boolean enConstructor() {
+        return !pilaConstructor.isEmpty() && pilaConstructor.peek();
+    }
+
+    @Override
+    public void ingresarPrograma(String archivo) {
+        this.archivoActual = archivo;
     }
 }

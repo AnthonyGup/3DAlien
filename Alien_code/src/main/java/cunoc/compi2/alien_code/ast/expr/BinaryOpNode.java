@@ -129,8 +129,15 @@ public class BinaryOpNode extends Expresion {
                 return Type.BOOL;
             case "<": case ">": case "<=": case ">=":
                 if (!TypeCompat.sonOrdenables(izq, der)) {
-                    ctx.registrarError(getLine(), getColumn(),
-                        "'" + operador + "' requiere tipos numéricos, se dio " + izq + " y " + der);
+                    if (izq == Type.CLASS || izq == Type.STRUCT
+                            || der == Type.CLASS || der == Type.STRUCT
+                            || izq == Type.NULL || der == Type.NULL) {
+                        ctx.registrarError(getLine(), getColumn(),
+                            "Operador '" + operador + "' no aplica a objetos");
+                    } else {
+                        ctx.registrarError(getLine(), getColumn(),
+                            "'" + operador + "' requiere tipos numéricos, se dio " + izq + " y " + der);
+                    }
                 }
                 return Type.BOOL;
             case "&&": case "||":

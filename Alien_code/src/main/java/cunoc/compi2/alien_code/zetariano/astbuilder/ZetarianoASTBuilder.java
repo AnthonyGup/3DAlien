@@ -13,6 +13,7 @@ import cunoc.compi2.alien_code.ast.decl.ClassDeclNode;
 import cunoc.compi2.alien_code.ast.decl.ConstructorDeclNode;
 import cunoc.compi2.alien_code.ast.decl.MethodDeclNode;
 import cunoc.compi2.alien_code.ast.decl.ParameterNode;
+import cunoc.compi2.alien_code.ast.decl.Visibilidad;
 import cunoc.compi2.alien_code.ast.expr.AccessNode;
 import cunoc.compi2.alien_code.ast.expr.BinaryOpNode;
 import cunoc.compi2.alien_code.ast.expr.ConditionalNode;
@@ -20,6 +21,7 @@ import cunoc.compi2.alien_code.ast.expr.LiteralNode;
 import cunoc.compi2.alien_code.ast.expr.NewArrayNode;
 import cunoc.compi2.alien_code.ast.expr.NewObjectNode;
 import cunoc.compi2.alien_code.ast.expr.StructLiteralNode;
+import cunoc.compi2.alien_code.ast.expr.ThisNode;
 import cunoc.compi2.alien_code.ast.expr.UnaryOpNode;
 import cunoc.compi2.alien_code.ast.program.ProgramNode;
 import cunoc.compi2.alien_code.ast.stmt.AssignmentNode;
@@ -34,6 +36,7 @@ import cunoc.compi2.alien_code.ast.stmt.ForNode;
 import cunoc.compi2.alien_code.ast.stmt.IfNode;
 import cunoc.compi2.alien_code.ast.stmt.IncrementNode;
 import cunoc.compi2.alien_code.ast.stmt.ReturnNode;
+import cunoc.compi2.alien_code.ast.stmt.SuperCallNode;
 import cunoc.compi2.alien_code.ast.stmt.SwitchNode;
 import cunoc.compi2.alien_code.ast.stmt.VariableDeclNode;
 import cunoc.compi2.alien_code.ast.stmt.WhileNode;
@@ -52,7 +55,8 @@ public class ZetarianoASTBuilder extends ZetarianoBaseVisitor<Node> {
 
     @Override
     public Node visitPrograma(ZetarianoParser.ProgramaContext ctx) {
-        String nombreClase = ctx.IDENTIFICADOR().getText();
+        String nombreClase = ctx.IDENTIFICADOR().get(0).getText();
+        String superclase = ctx.EXTENDS() != null ? ctx.IDENTIFICADOR().get(1).getText() : null;
         List<VariableDeclNode> atributos = new ArrayList<>();
         List<ConstructorDeclNode> constructores = new ArrayList<>();
         List<MethodDeclNode> metodos = new ArrayList<>();
@@ -68,22 +72,42 @@ public class ZetarianoASTBuilder extends ZetarianoBaseVisitor<Node> {
         ProgramNode program = new ProgramNode(line(ctx), column(ctx));
         program.sourceLanguage = "Zetariano";
         List<Node> declarations = new ArrayList<>();
-        declarations.add(new ClassDeclNode(nombreClase, atributos, constructores, metodos,
-                line(ctx), column(ctx)));
+        ClassDeclNode clase = new ClassDeclNode(nombreClase, atributos, constructores, metodos,
+                line(ctx), column(ctx));
+        clase.superclase = superclase;
+        clase.visibilidad = leerVisibilidad(ctx.visibilidad());
+        declarations.add(clase);
         program.declarations = declarations;
         return program;
+    }
+
+    private Visibilidad leerVisibilidad(ZetarianoParser.VisibilidadContext ctx) {
+        if (ctx == null) {
+            return Visibilidad.DEFAULT;
+        }
+        if (ctx.PRIVATE() != null) {
+            return Visibilidad.PRIVATE;
+        }
+        if (ctx.PROTECTED() != null) {
+            return Visibilidad.PROTECTED;
+        }
+        return Visibilidad.PUBLIC;
     }
 
     public VariableDeclNode visitCampoAtributo(ZetarianoParser.CampoAtributoContext ctx) {
         TipoZ tipo = resolverTipo(ctx.tipo(), contarDims(ctx.arrayDims()));
         String nombre = ctx.IDENTIFICADOR().getText();
         Node inicial = ctx.expresion() != null ? visit(ctx.expresion()) : null;
-        return declararVariable(nombre, tipo, inicial, ctx);
+        VariableDeclNode atributo = declararVariable(nombre, tipo, inicial, ctx);
+        atributo.visibilidad = leerVisibilidad(ctx.visibilidad());
+        return atributo;
     }
 
     public ConstructorDeclNode visitConstructor(ZetarianoParser.ConstructorContext ctx) {
-        return new ConstructorDeclNode(parametrosDe(ctx.parametros()), bloqueDe(ctx.bloque()),
-                line(ctx), column(ctx));
+        ConstructorDeclNode constructor = new ConstructorDeclNode(parametrosDe(ctx.parametros()),
+                bloqueDe(ctx.bloque()), line(ctx), column(ctx));
+        constructor.visibilidad = leerVisibilidad(ctx.visibilidad());
+        return constructor;
     }
 
     @Override
@@ -109,6 +133,8 @@ public class ZetarianoASTBuilder extends ZetarianoBaseVisitor<Node> {
                 tipoRetorno, bloqueDe(ctx.bloque()), line(ctx), column(ctx));
         metodo.tipoRetornoNombre = tipoRetornoNombre;
         metodo.tipoRetornoElemento = tipoRetornoElemento;
+        metodo.visibilidad = leerVisibilidad(ctx.visibilidad());
+        metodo.tieneOverride = ctx.OVERRIDE() != null;
         return metodo;
     }
 
@@ -148,6 +174,7 @@ public class ZetarianoASTBuilder extends ZetarianoBaseVisitor<Node> {
         if (ctx.whileClasico() != null) return visitWhileClasico(ctx.whileClasico());
         if (ctx.doWhileClasico() != null) return visitDoWhileClasico(ctx.doWhileClasico());
         if (ctx.retorno() != null) return visitRetorno(ctx.retorno());
+        if (ctx.superLlamada() != null) return visitSuperLlamada(ctx.superLlamada());
         if (ctx.BREAK() != null) return new BreakNode(line(ctx), column(ctx));
         if (ctx.CONTINUE() != null) return new ContinueNode(line(ctx), column(ctx));
         if (ctx.bloque() != null) return bloqueDe(ctx.bloque());
@@ -210,6 +237,11 @@ public class ZetarianoASTBuilder extends ZetarianoBaseVisitor<Node> {
     public Node visitRetorno(ZetarianoParser.RetornoContext ctx) {
         Node expresion = ctx.expresion() != null ? visit(ctx.expresion()) : null;
         return new ReturnNode(expresion, line(ctx), column(ctx));
+    }
+
+    @Override
+    public Node visitSuperLlamada(ZetarianoParser.SuperLlamadaContext ctx) {
+        return new SuperCallNode(argumentosDe(ctx.argumentos()), line(ctx), column(ctx));
     }
 
     @Override
@@ -392,8 +424,14 @@ public class ZetarianoASTBuilder extends ZetarianoBaseVisitor<Node> {
 
     @Override
     public Node visitAccesoVariable(ZetarianoParser.AccesoVariableContext ctx) {
-        AccessNode acceso = new AccessNode(ctx.IDENTIFICADOR().getText(), line(ctx), column(ctx));
-        for (ZetarianoParser.SufijoAccesoContext s : ctx.sufijoAcceso()) {
+        boolean esThis = ctx.baseAcceso().THIS() != null;
+        List<ZetarianoParser.SufijoAccesoContext> sufijos = ctx.sufijoAcceso();
+        if (esThis && sufijos.isEmpty()) {
+            return new ThisNode(line(ctx), column(ctx));
+        }
+        String base = esThis ? "this" : ctx.baseAcceso().IDENTIFICADOR().getText();
+        AccessNode acceso = new AccessNode(base, line(ctx), column(ctx));
+        for (ZetarianoParser.SufijoAccesoContext s : sufijos) {
             if (s.PAREN_IZQ() != null) {
                 acceso.sufijos.add(AccessNode.Sufijo.llamada(argumentosDe(s.argumentos())));
             } else if (s.CORCHETE_IZQ() != null) {
@@ -442,7 +480,7 @@ public class ZetarianoASTBuilder extends ZetarianoBaseVisitor<Node> {
 
     private Node visitarNew(ZetarianoParser.FactorContext ctx) {
         if (ctx.IDENTIFICADOR() != null) {
-            String nombreClase = ctx.IDENTIFICADOR().getText();
+        String nombreClase = ctx.IDENTIFICADOR().getText();
             if (ctx.PAREN_IZQ() != null) {
                 return new NewObjectNode(nombreClase, argumentosDe(ctx.argumentos()),
                         line(ctx), column(ctx));

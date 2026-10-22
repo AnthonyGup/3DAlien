@@ -8,11 +8,13 @@ import cunoc.compi2.alien_code.c3d.access.Literal3D;
 import cunoc.compi2.alien_code.c3d.access.MemoryAccess;
 import cunoc.compi2.alien_code.c3d.cuartetas.Leer3D;
 import cunoc.compi2.alien_code.c3d.cuartetas.Llamada3D;
+import cunoc.compi2.alien_code.c3d.cuartetas.LlamadaVirtual3D;
 import cunoc.compi2.alien_code.ir.CodigoContexto;
 import cunoc.compi2.alien_code.ir.Impresion;
 import cunoc.compi2.alien_code.ir.IntermediateCodeGenerator;
 import cunoc.compi2.alien_code.ir.Operandos;
 import cunoc.compi2.alien_code.semantic.ContextoSemantico;
+import cunoc.compi2.alien_code.semantic.POO;
 import cunoc.compi2.alien_code.semantic.Symbol;
 import cunoc.compi2.alien_code.semantic.TypeCompat;
 
@@ -73,7 +75,12 @@ public class AccessNode extends Expresion {
     @Override
     public MemoryAccess traducir(CodigoContexto ctx) {
         Symbol baseSymbol = baseResuelto != null ? baseResuelto : ctx.resolverSimbolo(nombre);
-        MemoryAccess actual = Operandos.nombre(ctx, nombre, baseSymbol);
+        boolean esThis = nombre.equals("this");
+        MemoryAccess actual = esThis
+                ? new Literal3D("self", Type.CLASS)
+                : Operandos.nombre(ctx, nombre, baseSymbol);
+        String claseBase = esThis && ctx instanceof IntermediateCodeGenerator g
+                ? g.currentClassName() : actual.getTipoNombre();
         String metodoPendiente = null;
         String claseObjetivo = null;
         for (Sufijo s : sufijos) {
@@ -87,9 +94,10 @@ public class AccessNode extends Expresion {
                             miembro != null ? miembro.getTipoNombre() : null,
                             miembro != null ? miembro.getDimensiones() : 0);
                     if (ctx instanceof IntermediateCodeGenerator gen2) {
-                        campo.setOffset(gen2.offsetCampo(actual.getTipoNombre(), s.nombreCampo));
+                        campo.setOffset(gen2.offsetCampo(claseBase, s.nombreCampo));
                     }
                     actual = campo;
+                    claseBase = campo.getTipoNombre();
                 }
             } else if (s.tipo == Sufijo.Tipo.INDICE) {
                 MemoryAccess indice = ((Expresion) s.indice).traducir(ctx);
@@ -106,18 +114,25 @@ public class AccessNode extends Expresion {
                 if (objetivo != null && objetivo.isNativa()) {
                     actual = traducirNativa(ctx, objetivo.getName(), argumentos);
                 } else {
+                    String tipoEstaticoRecv = esThis ? claseBase : actual.getTipoNombre();
                     MemoryAccess receptor = receiverPara(metodoPendiente, objetivo, actual);
-                    if (receptor != null) {
-                        argumentos.add(0, receptor);
-                    }
-                    String callee = callePara(ctx, metodoPendiente, claseObjetivo, objetivo,
-                            s.argumentos.size());
                     String ctypeRetorno = tipoRetornoDe(objetivo);
                     MemoryAccess destino = null;
                     if (ctypeRetorno != null) {
                         destino = Operandos.temporal(ctx, ctypeRetorno);
                     }
-                    ctx.agregar(new Llamada3D(callee, argumentos, destino));
+                    LlamadaVirtual3D virtual = intentarVirtual(ctx, objetivo, tipoEstaticoRecv,
+                            receptor, argumentos, destino, s.argumentos.size());
+                    if (virtual != null) {
+                        ctx.agregar(virtual);
+                    } else {
+                        if (receptor != null) {
+                            argumentos.add(0, receptor);
+                        }
+                        String callee = callePara(ctx, metodoPendiente, claseObjetivo, objetivo,
+                                s.argumentos.size());
+                        ctx.agregar(new Llamada3D(callee, argumentos, destino));
+                    }
                     actual = destino;
                 }
                 metodoPendiente = null;
@@ -141,6 +156,39 @@ public class AccessNode extends Expresion {
         return null;
     }
 
+    private LlamadaVirtual3D intentarVirtual(CodigoContexto ctx, Symbol objetivo,
+            String tipoEstatico, MemoryAccess receptor, List<MemoryAccess> argumentos,
+            MemoryAccess destino, int argCount) {
+        if (!(ctx instanceof IntermediateCodeGenerator gen) || gen.getLayouts() == null) {
+            return null;
+        }
+        if (receptor == null || objetivo == null || objetivo.getKind() != Symbol.Kind.METODO) {
+            return null;
+        }
+        if (objetivo.getVisibilidad() == cunoc.compi2.alien_code.ast.decl.Visibilidad.PRIVATE) {
+            return null;
+        }
+        String claseEstatica = tipoEstatico;
+        if ((claseEstatica == null || !gen.getLayouts().contiene(claseEstatica))
+                && receptor instanceof Literal3D lit && "self".equals(lit.getTexto())) {
+            claseEstatica = gen.currentClassName();
+        }
+        if (claseEstatica == null || !gen.getLayouts().contiene(claseEstatica)) {
+            return null;
+        }
+        cunoc.compi2.alien_code.ir.ClaseLayout layout = gen.getLayouts().layoutDe(claseEstatica);
+        int slot = layout.slotDe(objetivo.getName());
+        if (slot < 0) {
+            return null;
+        }
+        List<cunoc.compi2.alien_code.ir.ClaseLayout.ImplMetodo> candidatos =
+                gen.getLayouts().candidatos(claseEstatica, objetivo.getName());
+        if (candidatos.size() <= 1) {
+            return null;
+        }
+        return new LlamadaVirtual3D(receptor, slot, objetivo.getName(), argumentos, destino, candidatos);
+    }
+
     private String callePara(CodigoContexto ctx, String metodoPendiente, String claseObjetivo,
             Symbol objetivo, int argCount) {
         List<List<Type>> firmas = objetivo != null
@@ -148,11 +196,15 @@ public class AccessNode extends Expresion {
         IntermediateCodeGenerator gen = (IntermediateCodeGenerator) ctx;
         if (metodoPendiente != null) {
             int idx = gen.overloadIndexByArgCount(firmas, argCount);
-            return claseObjetivo + "_" + metodoPendiente + "_" + idx;
+            String clase = objetivo != null && objetivo.getClaseDuena() != null
+                    ? objetivo.getClaseDuena() : claseObjetivo;
+            return clase + "_" + metodoPendiente + "_" + idx;
         }
         if (objetivo != null && objetivo.getKind() == Symbol.Kind.METODO) {
             int idx = gen.overloadIndexByArgCount(firmas, argCount);
-            return ctx.currentClassName() + "_" + objetivo.getName() + "_" + idx;
+            String clase = objetivo.getClaseDuena() != null
+                    ? objetivo.getClaseDuena() : ctx.currentClassName();
+            return clase + "_" + objetivo.getName() + "_" + idx;
         }
         return nombre;
     }
@@ -179,10 +231,34 @@ public class AccessNode extends Expresion {
     }
     @Override
     public Type analizar(ContextoSemantico ctx) {
-        Symbol actual = ctx.resolver(nombre);
-        if (actual == null) {
-            ctx.registrarError(getLine(), getColumn(), "Variable no declarada: '" + nombre + "'");
-            return null;
+        Symbol actual;
+        if (nombre.equals("this")) {
+            if (!ctx.enRutina() || ctx.claseActual() == null) {
+                ctx.registrarError(getLine(), getColumn(),
+                    "'this' solo puede usarse dentro de una clase");
+                return null;
+            }
+            actual = ctx.claseActual();
+        } else {
+            actual = ctx.resolver(nombre);
+            if (actual == null && ctx.claseActual() != null) {
+                Symbol clase = ctx.claseActual();
+                Symbol miembro = POO.buscarAtributoIncluyendoPrivado(clase, nombre);
+                if (miembro != null) {
+                    if (POO.puedeAcceder(miembro, clase)) {
+                        actual = miembro;
+                    } else {
+                        String duena = miembro.getClaseDuena() != null ? miembro.getClaseDuena() : "?";
+                        ctx.registrarError(getLine(), getColumn(),
+                            "'" + nombre + "' es privado en '" + duena + "'");
+                        return null;
+                    }
+                }
+            }
+            if (actual == null) {
+                ctx.registrarError(getLine(), getColumn(), "Variable no declarada: '" + nombre + "'");
+                return null;
+            }
         }
         baseResuelto = actual;
 
@@ -192,26 +268,43 @@ public class AccessNode extends Expresion {
         for (Sufijo s : sufijos) {
             switch (s.tipo) {
                 case CAMPO: {
-                    if (actual.getType() != Type.STRUCT && actual.getType() != Type.CLASS) {
+                    if (actual.getType() != Type.STRUCT && actual.getType() != Type.CLASS
+                            && actual.getKind() != Symbol.Kind.CLASE
+                            && actual.getKind() != Symbol.Kind.ESTRUCTURA) {
                         ctx.registrarError(getLine(), getColumn(),
                             "No se puede acceder a '." + s.nombreCampo + "' sobre " + actual.getType());
                         return null;
                     }
-                    Symbol tipoContenedor = ctx.resolver(actual.getTipoNombre());
+                    Symbol tipoContenedor = contenedorDe(ctx, actual);
                     if (tipoContenedor == null || tipoContenedor.getMiembros() == null) {
                         ctx.registrarError(getLine(), getColumn(),
-                            "Tipo '" + actual.getTipoNombre() + "' sin miembros registrados");
+                            "Tipo '" + nombreTipo(actual) + "' sin miembros registrados");
                         return null;
                     }
-                    Symbol miembro = tipoContenedor.getMiembros().resolve(s.nombreCampo);
-                    s.resuelto = miembro;
-                    s.claseObjetivo = tipoContenedor.getName();
-                    if (miembro != null) {
-                        actual = miembro;
-                        metodoPendiente = null;
-                    } else {
+                    Symbol miembro = POO.buscarAtributo(tipoContenedor, s.nombreCampo);
+                    if (miembro == null) {
+                        miembro = tipoContenedor.getMiembros().resolveLocal(s.nombreCampo);
+                    }
+                    if (miembro != null && miembro.getKind() == Symbol.Kind.METODO) {
+                        s.resuelto = miembro;
+                        s.claseObjetivo = tipoContenedor.getName();
                         metodoPendiente = s.nombreCampo;
                         contenedorPendiente = tipoContenedor;
+                    } else {
+                        s.resuelto = miembro;
+                        s.claseObjetivo = tipoContenedor.getName();
+                        if (miembro != null) {
+                            verificarAcceso(ctx, miembro);
+                            actual = miembro;
+                            metodoPendiente = null;
+                        } else {
+                            Symbol metodoHeredado = POO.buscarMetodo(tipoContenedor, s.nombreCampo);
+                            if (metodoHeredado != null) {
+                                s.resuelto = metodoHeredado;
+                            }
+                            metodoPendiente = s.nombreCampo;
+                            contenedorPendiente = tipoContenedor;
+                        }
                     }
                     break;
                 }
@@ -238,10 +331,18 @@ public class AccessNode extends Expresion {
                 case LLAMADA: {
                     List<Type> tiposArgs = tiposDeArgumentos(ctx, s.argumentos);
                     if (metodoPendiente != null) {
-                        Symbol metodo = contenedorPendiente.getMiembros().resolve(metodoPendiente);
+                        Symbol metodo = POO.buscarMetodo(contenedorPendiente, metodoPendiente);
                         if (metodo == null) {
-                            ctx.registrarError(getLine(), getColumn(),
-                                "No existe el método '" + metodoPendiente + "'");
+                            Symbol privado = POO.buscarMetodoIncluyendoPrivado(contenedorPendiente, metodoPendiente);
+                            if (privado != null && !POO.puedeAcceder(privado, ctx.claseActual())) {
+                                String duena = privado.getClaseDuena() != null ? privado.getClaseDuena() : "?";
+                                ctx.registrarError(getLine(), getColumn(),
+                                    "'" + metodoPendiente + "' es privado en '" + duena + "'");
+                            } else {
+                                ctx.registrarError(getLine(), getColumn(),
+                                    "'" + contenedorPendiente.getName() + "' no tiene un método '"
+                                    + metodoPendiente + "'");
+                            }
                             return null;
                         }
                         if (!metodo.tieneFirmaCompatible(tiposArgs)) {
@@ -249,10 +350,27 @@ public class AccessNode extends Expresion {
                                 "El método '" + metodoPendiente + "' no coincide con los argumentos dados");
                             return null;
                         }
+                        verificarAcceso(ctx, metodo);
                         s.resuelto = metodo;
                         s.claseObjetivo = contenedorPendiente.getName();
                         actual = metodo;
                         metodoPendiente = null;
+                    } else if (actual != null && (actual.getKind() == Symbol.Kind.CLASE
+                            || actual.getKind() == Symbol.Kind.ESTRUCTURA)) {
+                        Symbol metodo = POO.buscarMetodo(actual, nombre);
+                        if (metodo == null) {
+                            ctx.registrarError(getLine(), getColumn(),
+                                "'" + actual.getName() + "' no tiene un método '" + nombre + "'");
+                            return null;
+                        }
+                        s.resuelto = metodo;
+                        if (!metodo.tieneFirmaCompatible(tiposArgs)) {
+                            ctx.registrarError(getLine(), getColumn(),
+                                "El método '" + metodo.getName() + "' no coincide con los argumentos dados");
+                            return null;
+                        }
+                        verificarAcceso(ctx, metodo);
+                        actual = metodo;
                     } else {
                         Symbol objetivo = actual;
                         if (objetivo == null || (objetivo.getKind() != Symbol.Kind.FUNCION
@@ -304,7 +422,39 @@ public class AccessNode extends Expresion {
         return actual.getType();
     }
 
-    static List<Type> tiposDeArgumentos(ContextoSemantico ctx, List<Node> argumentos) {
+    private Symbol contenedorDe(ContextoSemantico ctx, Symbol actual) {
+        if (actual.getKind() == Symbol.Kind.CLASE || actual.getKind() == Symbol.Kind.ESTRUCTURA) {
+            return actual;
+        }
+        Symbol porNombre = ctx.resolver(actual.getTipoNombre());
+        if (porNombre != null) {
+            return porNombre;
+        }
+        return POO.buscarClase(ctx, actual.getTipoNombre());
+    }
+
+    private String nombreTipo(Symbol actual) {
+        if (actual.getTipoNombre() != null) return actual.getTipoNombre();
+        return actual.getName();
+    }
+
+    private void verificarAcceso(ContextoSemantico ctx, Symbol miembro) {
+        Symbol contexto = ctx.claseActual();
+        if (POO.puedeAcceder(miembro, contexto)) {
+            return;
+        }
+        String duena = miembro.getClaseDuena() != null ? miembro.getClaseDuena() : "?";
+        if (miembro.getVisibilidad() == cunoc.compi2.alien_code.ast.decl.Visibilidad.PRIVATE) {
+            ctx.registrarError(getLine(), getColumn(),
+                "'" + miembro.getName() + "' es privado en '" + duena + "'");
+        } else {
+            ctx.registrarError(getLine(), getColumn(),
+                "'" + miembro.getName() + "' es protegido en '" + duena
+                + "' y solo es accesible desde sus subclases");
+        }
+    }
+
+    public static List<Type> tiposDeArgumentos(ContextoSemantico ctx, List<Node> argumentos) {
         List<Type> tipos = new ArrayList<>();
         for (Node arg : argumentos) {
             tipos.add(tipoDeArgumento(ctx, arg));
@@ -324,7 +474,7 @@ public class AccessNode extends Expresion {
     }
 
     public static Symbol resolverSimbolo(ContextoSemantico ctx, AccessNode acceso) {
-        Symbol actual = ctx.resolver(acceso.nombre);
+        Symbol actual = acceso.nombre.equals("this") ? ctx.claseActual() : ctx.resolver(acceso.nombre);
         if (actual == null) {
             return null;
         }
@@ -333,14 +483,22 @@ public class AccessNode extends Expresion {
                 return null;
             }
             if (s.tipo == Sufijo.Tipo.CAMPO) {
-                if (actual.getType() != Type.STRUCT && actual.getType() != Type.CLASS) {
-                    return null;
+                Symbol contenedor;
+                if (actual.getKind() == Symbol.Kind.CLASE || actual.getKind() == Symbol.Kind.ESTRUCTURA) {
+                    contenedor = actual;
+                } else {
+                    if (actual.getType() != Type.STRUCT && actual.getType() != Type.CLASS) {
+                        return null;
+                    }
+                    contenedor = ctx.resolver(actual.getTipoNombre());
                 }
-                Symbol contenedor = ctx.resolver(actual.getTipoNombre());
                 if (contenedor == null || contenedor.getMiembros() == null) {
                     return null;
                 }
-                actual = contenedor.getMiembros().resolve(s.nombreCampo);
+                actual = POO.buscarAtributo(contenedor, s.nombreCampo);
+                if (actual == null) {
+                    actual = contenedor.getMiembros().resolveLocal(s.nombreCampo);
+                }
                 if (actual == null) {
                     return null;
                 }

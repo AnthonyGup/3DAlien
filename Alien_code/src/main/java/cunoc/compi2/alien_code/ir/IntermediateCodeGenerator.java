@@ -38,8 +38,10 @@ public class IntermediateCodeGenerator implements CodigoContexto {
     private final Deque<Marco> marcos = new ArrayDeque<>();
     private final Map<String, Marco> marcosPorFuncion = new LinkedHashMap<>();
     private final Map<Llamada3D, Marco> llamadasPendientes = new IdentityHashMap<>();
+    private final Map<cunoc.compi2.alien_code.c3d.cuartetas.LlamadaVirtual3D, Marco> llamadasVirtuales = new IdentityHashMap<>();
     private boolean layoutFinalizado = false;
     private int totalGlobales = -1;
+    private final ClaseLayouts layouts;
 
     public static final class Marco {
         public final String nombre;
@@ -68,7 +70,12 @@ public class IntermediateCodeGenerator implements CodigoContexto {
         this.tabla = tabla;
         this.tempCounter = 0;
         this.labelCounter = 0;
+        this.layouts = new ClaseLayouts(tabla);
         inicializarGlobales();
+    }
+
+    public ClaseLayouts getLayouts() {
+        return layouts;
     }
 
     public List<Cuarteta> getInstrucciones() {
@@ -139,6 +146,9 @@ public class IntermediateCodeGenerator implements CodigoContexto {
         if (tipoNombre == null) {
             return -1;
         }
+        if (layouts != null && layouts.contiene(tipoNombre)) {
+            return layouts.offsetCampo(tipoNombre, campo);
+        }
         Map<String, Integer> mapa = camposPorTipo.computeIfAbsent(tipoNombre, k -> {
             Map<String, Integer> mm = new LinkedHashMap<>();
             Symbol tipo = tiposGlobales.get(k);
@@ -200,6 +210,13 @@ public class IntermediateCodeGenerator implements CodigoContexto {
                 lam.setTieneSelf(callee != null && callee.tieneSelf);
             }
         }
+        for (Map.Entry<cunoc.compi2.alien_code.c3d.cuartetas.LlamadaVirtual3D, Marco> e : llamadasVirtuales.entrySet()) {
+            cunoc.compi2.alien_code.c3d.cuartetas.LlamadaVirtual3D virt = e.getKey();
+            Marco m = e.getValue();
+            virt.setCallerFrameSize(m.tamano);
+            virt.setTieneSelf(true);
+            virt.setUsuario(true);
+        }
         totalGlobales = siguienteGlobal;
     }
 
@@ -248,6 +265,9 @@ public class IntermediateCodeGenerator implements CodigoContexto {
         instrucciones.add(cuarteta);
         if (cuarteta instanceof Llamada3D lam) {
             llamadasPendientes.put(lam, marcos.peek());
+        }
+        if (cuarteta instanceof cunoc.compi2.alien_code.c3d.cuartetas.LlamadaVirtual3D virt) {
+            llamadasVirtuales.put(virt, marcos.peek());
         }
         if (cuarteta instanceof cunoc.compi2.alien_code.c3d.cuartetas.DeclararArreglo3D arr) {
             Symbol s = resolverSimbolo(arr.getNombre());
@@ -322,6 +342,16 @@ public class IntermediateCodeGenerator implements CodigoContexto {
         pilaClases.push(new InfoClase(nombre));
     }
 
+    public void setAtributosClase(java.util.List<cunoc.compi2.alien_code.ast.stmt.VariableDeclNode> atributos) {
+        if (!pilaClases.isEmpty()) {
+            pilaClases.peek().atributos = atributos;
+        }
+    }
+
+    public java.util.List<cunoc.compi2.alien_code.ast.stmt.VariableDeclNode> getAtributosClase() {
+        return pilaClases.isEmpty() ? java.util.Collections.emptyList() : pilaClases.peek().atributos;
+    }
+
     @Override
     public void popClassTranslation() {
         if (!pilaClases.isEmpty()) {
@@ -355,6 +385,8 @@ public class IntermediateCodeGenerator implements CodigoContexto {
 
     private static final class InfoClase {
         final String nombre;
+        java.util.List<cunoc.compi2.alien_code.ast.stmt.VariableDeclNode> atributos =
+            java.util.Collections.emptyList();
         final Map<String, Integer> indicesMetodos = new HashMap<>();
         int indicesConstructores;
 

@@ -17,6 +17,7 @@ import java.util.List;
 
 public class NewObjectNode extends Expresion {
     public String nombreClase;
+    public String tipoDeclarado;
     public List<Node> argumentos;
     private Symbol claseResuelta;
     private final int line;
@@ -51,7 +52,8 @@ public class NewObjectNode extends Expresion {
         int overloadIndex = claseResuelta != null
                 ? gen.overloadIndexByArgCount(claseResuelta.getFirmasConstructores(), argumentos.size())
                 : 0;
-        ctx.agregar(new Llamada3D(nombreClase + "_init_" + overloadIndex, argumentosTraducidos, null));
+        String etiquetaCtor = cunoc.compi2.alien_code.ir.NombresInternos.constructor(nombreClase, overloadIndex);
+        ctx.agregar(new Llamada3D(etiquetaCtor, argumentosTraducidos, null));
         return t;
     }
     @Override
@@ -59,7 +61,7 @@ public class NewObjectNode extends Expresion {
         Symbol clase = ctx.resolver(nombreClase);
         if (clase == null || clase.getKind() != Symbol.Kind.CLASE) {
             ctx.registrarError(getLine(), getColumn(),
-                "'" + nombreClase + "' no es una clase conocida (¿falta un import .z?)");
+                "La clase '" + nombreClase + "' no existe");
             for (Node a : argumentos) ctx.evaluar(a);
             return null;
         }
@@ -71,6 +73,30 @@ public class NewObjectNode extends Expresion {
                 "No existe un constructor de '" + nombreClase + "' que reciba esos argumentos");
             return null;
         }
+        verificarAccesoConstructor(ctx, clase, tiposArgs);
         return Type.CLASS;
+    }
+
+    private void verificarAccesoConstructor(ContextoSemantico ctx, Symbol clase, List<Type> tiposArgs) {
+        Symbol contexto = ctx.claseActual();
+        for (Symbol ctor : clase.getConstructores()) {
+            if (firmaCoincide(ctor.getTiposParametros(), tiposArgs)) {
+                if (!cunoc.compi2.alien_code.semantic.POO.puedeAcceder(ctor, contexto)) {
+                    ctx.registrarError(getLine(), getColumn(),
+                        "El constructor de '" + clase.getName() + "' no es accesible desde aquí");
+                }
+                return;
+            }
+        }
+    }
+
+    private boolean firmaCoincide(List<Type> params, List<Type> args) {
+        if (params.size() != args.size()) return false;
+        for (int i = 0; i < params.size(); i++) {
+            if (!cunoc.compi2.alien_code.semantic.TypeCompat.esAsignable(params.get(i), args.get(i))) {
+                return false;
+            }
+        }
+        return true;
     }
 }

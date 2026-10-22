@@ -22,6 +22,7 @@ import cunoc.compi2.alien_code.c3d.cuartetas.Leer3D;
 import cunoc.compi2.alien_code.c3d.cuartetas.Llamada3D;
 import cunoc.compi2.alien_code.c3d.cuartetas.Operacion3D;
 import cunoc.compi2.alien_code.c3d.cuartetas.Retornar3D;
+import cunoc.compi2.alien_code.ir.ClaseLayouts;
 import cunoc.compi2.alien_code.semantic.Symbol;
 import cunoc.compi2.alien_code.semantic.SymbolTable;
 
@@ -58,18 +59,27 @@ public class CCodeGenerator {
     private int totalGlobales = 0;
 
     private final Map<Llamada3D, Integer> retIds = new IdentityHashMap<>();
+    private final Map<cunoc.compi2.alien_code.c3d.cuartetas.LlamadaVirtual3D, Integer> retIdsVirt = new IdentityHashMap<>();
     private int retCounter = 0;
     private List<Cuarteta> todas = new ArrayList<>();
+    private ClaseLayouts layouts;
 
     public String generate(List<Cuarteta> instrucciones, SymbolTable tabla, Map<Integer, String> tiposTemporales) {
+        return generate(instrucciones, tabla, tiposTemporales, null);
+    }
+
+    public String generate(List<Cuarteta> instrucciones, SymbolTable tabla, Map<Integer, String> tiposTemporales,
+            ClaseLayouts layouts) {
         code.setLength(0);
         this.tiposTemporales = tiposTemporales == null ? new HashMap<>() : tiposTemporales;
         this.tabla = tabla;
         this.todas = instrucciones;
+        this.layouts = layouts;
         camposPorTipo.clear();
         simbolosPorNombre.clear();
         stringBases.clear();
         retIds.clear();
+        retIdsVirt.clear();
         retCounter = 0;
         totalGlobales = 0;
         areaStrings = 0;
@@ -212,6 +222,10 @@ public class CCodeGenerator {
         } else if (c instanceof Llamada3D l) {
             ops.add(l.getResult());
             ops.addAll(l.getArgumentos());
+        } else if (c instanceof cunoc.compi2.alien_code.c3d.cuartetas.LlamadaVirtual3D v) {
+            ops.add(v.getReceptor());
+            ops.add(v.getDestino());
+            ops.addAll(v.getArgumentos());
         } else if (c instanceof Imprimir3D imp && imp.getOperandos() != null) {
             ops.addAll(imp.getOperandos());
         } else if (c instanceof Leer3D r) {
@@ -226,6 +240,8 @@ public class CCodeGenerator {
         for (Cuarteta c : instrucciones) {
             if (c instanceof Llamada3D lam && lam.isUsuario()) {
                 retIds.put(lam, ++retCounter);
+            } else if (c instanceof cunoc.compi2.alien_code.c3d.cuartetas.LlamadaVirtual3D virt) {
+                retIdsVirt.put(virt, ++retCounter);
             }
         }
     }
@@ -268,9 +284,10 @@ public class CCodeGenerator {
         code.append("int main(void) {\n");
         code.append("    setvbuf(stdout, NULL, _IONBF, 0);\n");
         code.append("    double P = ").append(totalGlobales).append(".0;\n");
-        code.append("    double H = 0.0;\n");
+        code.append("    double H = 1.0;\n");
         code.append("    double S = ").append(areaStrings).append(".0;\n");
-        code.append("    int __ri = 0; double __rd = 0.0; char __rc = 0; double __ret = 0.0;\n");
+        code.append("    int __ri = 0; double __rd = 0.0; char __rc = 0; double __ret = 0.0;")
+            .append(retIdsVirt.isEmpty() ? "" : " double __rv = 0.0;").append("\n");
         for (Map.Entry<String, Integer> e : stringBases.entrySet()) {
             code.append("    strcpy(&Str[").append(e.getValue()).append("], ").append(e.getKey()).append(");\n");
         }
@@ -294,6 +311,10 @@ public class CCodeGenerator {
 
         code.append("L_disp: ;\n");
         for (Map.Entry<Llamada3D, Integer> e : retIds.entrySet()) {
+            code.append("    if (Stack[(int)(P + 0)] == ").append(e.getValue()).append(") goto Lret_")
+                .append(e.getValue()).append(";\n");
+        }
+        for (Map.Entry<cunoc.compi2.alien_code.c3d.cuartetas.LlamadaVirtual3D, Integer> e : retIdsVirt.entrySet()) {
             code.append("    if (Stack[(int)(P + 0)] == ").append(e.getValue()).append(") goto Lret_")
                 .append(e.getValue()).append(";\n");
         }
@@ -332,6 +353,8 @@ public class CCodeGenerator {
             emitirLeer(leer);
         } else if (c instanceof Llamada3D lam) {
             emitirLlamada(lam);
+        } else if (c instanceof cunoc.compi2.alien_code.c3d.cuartetas.LlamadaVirtual3D virt) {
+            emitirLlamadaVirtual(virt);
         } else if (c instanceof Retornar3D ret) {
             if (ret.getOperand1() != null) {
                 code.append("    Stack[(int)(P + 1)] = ").append(expr(ret.getOperand1())).append(";\n");
@@ -353,6 +376,18 @@ public class CCodeGenerator {
                 String clase = texto.substring("malloc(sizeof(struct ".length());
                 int corte = clase.indexOf(')');
                 if (corte >= 0) clase = clase.substring(0, corte);
+                boolean esClase = layouts != null && layouts.contiene(clase);
+                if (esClase) {
+                    int tamano = Math.max(1, layouts.tamanoDe(clase));
+                    code.append("    ").append(dest).append(" = H;\n");
+                    code.append("    H = H + ").append(tamano).append(";\n");
+                    for (int k = 0; k < tamano; k++) {
+                        code.append("    Heap[(int)(").append(dest).append(") + ").append(k).append("] = 0;\n");
+                    }
+                    code.append("    Heap[(int)(").append(dest).append(") + 0] = ")
+                        .append(layouts.idDe(clase)).append(";\n");
+                    return;
+                }
                 int n = cuentaCampos(clase);
                 code.append("    ").append(dest).append(" = H;\n");
                 code.append("    H = H + ").append(Math.max(1, n)).append(";\n");
@@ -607,6 +642,35 @@ public class CCodeGenerator {
         code.append("    P = P - ").append(frame).append(".0;\n");
         if (lam.getResult() != null) {
             code.append("    ").append(expr(lam.getResult())).append(" = __ret;\n");
+        }
+    }
+
+    private void emitirLlamadaVirtual(cunoc.compi2.alien_code.c3d.cuartetas.LlamadaVirtual3D virt) {
+        int retId = retIdsVirt.getOrDefault(virt, 0);
+        int frame = Math.max(0, virt.getCallerFrameSize());
+        String receptor = expr(virt.getReceptor());
+        List<MemoryAccess> args = virt.getArgumentos();
+        code.append("    __rv = ").append(receptor).append(";\n");
+        code.append("    Stack[(int)(P + ").append(frame).append(" + 0)] = ").append(retId).append(";\n");
+        code.append("    Stack[(int)(P + ").append(frame).append(" + 2)] = __rv;\n");
+        for (int i = 0; i < args.size(); i++) {
+            code.append("    Stack[(int)(P + ").append(frame).append(" + ").append(3 + i).append(")] = ")
+                .append(expr(args.get(i))).append(";\n");
+        }
+        code.append("    P = P + ").append(frame).append(".0;\n");
+        code.append("    switch((int)(Heap[(int)(__rv) + 0])) {\n");
+        for (Map.Entry<Integer, String> e : virt.tablaDespacho().entrySet()) {
+            code.append("        case ").append(e.getKey()).append(": goto ")
+                .append(e.getValue()).append(";\n");
+        }
+        code.append("    }\n");
+        code.append("Lret_").append(retId).append(": ;\n");
+        if (virt.getDestino() != null) {
+            code.append("    __ret = Stack[(int)(P + 1)];\n");
+        }
+        code.append("    P = P - ").append(frame).append(".0;\n");
+        if (virt.getDestino() != null) {
+            code.append("    ").append(expr(virt.getDestino())).append(" = __ret;\n");
         }
     }
 
