@@ -24,12 +24,12 @@ public class VentanaMenuBar extends JMenuBar {
         menuArchivo.add(item("Salir"));
         add(menuArchivo);
 
-        JMenu menuReportes = new JMenu("Reportes");
+JMenu menuReportes = new JMenu("Reportes");
         menuReportes.add(item("Ver errores"));
-        menuReportes.add(item("Ver tabla de símbolos"));
+        menuReportes.add(item("Ver tabla de s\u00edmbolos"));
         menuReportes.add(item("Ver cuartetas"));
-        menuReportes.add(item("Ver C3D"));
-        menuReportes.add(item("Ver código C generado"));
+        menuReportes.add(item("Ver c\u00f3digo C generado"));
+        menuReportes.add(item("Ver c\u00f3digo RISC-V generado"));
         add(menuReportes);
 
         JMenu menuAyuda = new JMenu("Ayuda");
@@ -74,8 +74,8 @@ public class VentanaMenuBar extends JMenuBar {
     public void setOnVerErrores(ActionListener l) { anclarReportes(0, l); }
     public void setOnVerSimbolos(ActionListener l) { anclarReportes(1, l); }
     public void setOnVerCuartetas(ActionListener l) { anclarReportes(2, l); }
-    public void setOnVerC3D(ActionListener l) { anclarReportes(3, l); }
-    public void setOnVerCodigoC(ActionListener l) { anclarReportes(4, l); }
+    public void setOnVerCodigoC(ActionListener l) { anclarReportes(3, l); }
+    public void setOnVerCodigoRISCV(ActionListener l) { anclarReportes(4, l); }
     public void setOnAcercaDe(ActionListener l) { anclarAyuda(0, l); }
     public void setOnCompilarMain(ActionListener l) { botonCompilarMain.addActionListener(l); }
     public void setOnLimpiarLog(ActionListener l) { botonLimpiarLog.addActionListener(l); }

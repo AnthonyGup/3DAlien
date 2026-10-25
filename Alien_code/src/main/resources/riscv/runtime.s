@@ -1,14 +1,16 @@
 # =============================================================================
 #  runtime.s  --  Runtime de St4ck Over-Pig  (RISC-V RV32IMFD, RARS 1.6)
 # =============================================================================
-#  CONTRATO CON EL CODIGO GENERADO
-#    s0 = &Stack   s1 = &Heap   s2 = &Str   (constantes, el runtime NO las toca)
-#    s3 = P        s4 = H       s5 = S      (enteros; solo s5 lo cambian las rutinas
-#                                            que reservan texto: rt_conc, rt_strd,
-#                                            rt_strn, rt_strc)
+#  CONTRATO CON EL CODIGO GENERADO  (v2: pila real con fp, como en clase)
+#    s0 = fp (frame pointer, lo maneja el codigo generado; el runtime NO lo toca)
+#    s1 = H  (direccion del siguiente byte libre del Heap)   -- el runtime NO lo toca
+#    s2 = S  (direccion del siguiente byte libre del area de cadenas); lo avanzan
+#            las rutinas que reservan texto: rt_conc, rt_strd, rt_strn, rt_strc
+#    s6-s10: el runtime los usa y los restaura (callee-saved)
 #    Las rutinas pueden pisar t0-t6, a0-a7, ft0-ft11, fa0-fa7 y ra.
-#    Argumentos: enteros en a0/a1, doubles en fa0. Resultado: a0 (entero) o fa0.
-#    Un "indice de Str" es un entero: la cadena vive en s2 + indice (terminada en 0).
+#    Argumentos: enteros/direcciones en a0/a1, doubles en fa0. Resultado: a0 o fa0.
+#    Una cadena es una DIRECCION (terminada en 0), nunca un indice.
+#    Un booleano es un entero 0/1 en a0.
 #
 #  Entrada: SOLO se usa el ecall 8 (leer linea). Los ecalls 5, 7 y 12 de RARS son
 #  por linea y abortan con el fin de entrada; aqui se emula scanf encima de ecall 8.
@@ -50,22 +52,16 @@ rt_print_char:                # a0 = codigo de caracter
     ecall
     ret
 
-rt_print_cstr:                # a0 = DIRECCION de una cadena en memoria
+rt_print_cstr:                # a0 = DIRECCION de una cadena (literal del formato)
+rt_print_str:                 # a0 = DIRECCION de una cadena (variable de tipo textum)
     li   a7, 4
     ecall
     ret
 
-rt_print_str:                 # a0 = INDICE en Str
-    add  a0, a0, s2
-    li   a7, 4
-    ecall
-    ret
-
-rt_print_bool:                # fa0 = double; distinto de 0 -> "true"
-    fcvt.d.w ft0, zero
-    feq.d t0, fa0, ft0
+rt_print_bool:                # a0 = 0/1 ; distinto de 0 -> "true"
+    mv   t0, a0
     la   a0, rt_s_true
-    beqz t0, rt_pb_go
+    bnez t0, rt_pb_go
     la   a0, rt_s_false
 rt_pb_go:
     li   a7, 4
@@ -168,45 +164,45 @@ rt_itoa_f:
     add  a0, a0, a2
     ret
 
-rt_strd:                      # a0 = entero -> a0 = indice en Str (sprintf "%d")
+rt_strd:                      # a0 = entero -> a0 = DIRECCION de la cadena (sprintf "%d")
     addi sp, sp, -16
     sw   ra, 12(sp)
-    sw   s5, 8(sp)
+    sw   s2, 8(sp)
     mv   a1, a0
-    add  a0, s2, s5
+    mv   a0, s2
     jal  ra, rt_itoa
     addi a0, a0, 1
-    add  s5, s5, a0
+    add  s2, s2, a0
     lw   a0, 8(sp)
     lw   ra, 12(sp)
     addi sp, sp, 16
     ret
 
-rt_strn:                      # fa0 = double -> a0 = indice en Str (sprintf "%g")
+rt_strn:                      # fa0 = double -> a0 = DIRECCION de la cadena (sprintf "%g")
     addi sp, sp, -16
     sw   ra, 12(sp)
-    sw   s5, 8(sp)
-    add  a0, s2, s5
+    sw   s2, 8(sp)
+    mv   a0, s2
     jal  ra, rt_fmt_g
     addi a0, a0, 1
-    add  s5, s5, a0
+    add  s2, s2, a0
     lw   a0, 8(sp)
     lw   ra, 12(sp)
     addi sp, sp, 16
     ret
 
-rt_strc:                      # a0 = caracter -> a0 = indice en Str
-    add  t0, s2, s5
+rt_strc:                      # a0 = caracter -> a0 = DIRECCION de la cadena
+    mv   t0, s2
     sb   a0, 0(t0)
     sb   zero, 1(t0)
-    mv   a0, s5
-    addi s5, s5, 2
+    mv   a0, s2
+    addi s2, s2, 2
     ret
 
-rt_conc:                      # a0 = indice A, a1 = indice B -> a0 = indice resultado
-    mv   t0, s5
-    add  t1, s2, s5
-    add  t2, s2, a0
+rt_conc:                      # a0 = dir A, a1 = dir B -> a0 = dir de la cadena nueva
+    mv   t0, s2               # resultado
+    mv   t1, s2               # destino
+    mv   t2, a0
 rt_conc_a:
     lb   t3, 0(t2)
     beqz t3, rt_conc_b0
@@ -215,7 +211,7 @@ rt_conc_a:
     addi t2, t2, 1
     j    rt_conc_a
 rt_conc_b0:
-    add  t2, s2, a1
+    mv   t2, a1
 rt_conc_b:
     lb   t3, 0(t2)
     sb   t3, 0(t1)
@@ -225,7 +221,7 @@ rt_conc_b:
     j    rt_conc_b
 rt_conc_e:
     addi t1, t1, 1
-    sub  s5, t1, s2
+    mv   s2, t1
     mv   a0, t0
     ret
 
@@ -680,11 +676,11 @@ rt_ri_r:
     addi sp, sp, 32
     ret
 
-rt_read_str:                  # scanf("%s", &Str[a0]): una palabra, escribe 0 final
+rt_read_str:                  # scanf("%s", a0): una palabra en la DIRECCION a0, con 0 final
     addi sp, sp, -16
     sw   ra, 12(sp)
     sw   s6, 8(sp)
-    add  s6, s2, a0
+    mv   s6, a0
     jal  ra, rt_skipws
     bltz a0, rt_rs_e
 rt_rs_l:

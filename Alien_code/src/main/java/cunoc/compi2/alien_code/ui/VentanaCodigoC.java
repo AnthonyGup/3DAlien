@@ -3,7 +3,6 @@ package cunoc.compi2.alien_code.ui;
 import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
-import java.awt.Font;
 import java.awt.Window;
 import java.io.BufferedReader;
 import java.io.File;
@@ -18,12 +17,12 @@ import javax.swing.JDialog;
 import javax.swing.JFileChooser;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
-import javax.swing.JScrollPane;
-import javax.swing.JTextArea;
+import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
+import org.fife.ui.rtextarea.RTextScrollPane;
 
 public class VentanaCodigoC extends JDialog {
 
-    private final JTextArea area;
+    private final RSyntaxTextArea area;
     private final PanelLog log;
     private final File carpetaProyecto;
 
@@ -31,29 +30,41 @@ public class VentanaCodigoC extends JDialog {
         super(propietario, titulo);
         this.log = log;
         this.carpetaProyecto = carpetaProyecto;
-        area = new JTextArea();
-        area.setEditable(false);
-        area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 13));
+
+        area = new RSyntaxTextArea();
+        area.setSyntaxEditingStyle("text/x-c");
+        area.setCodeFoldingEnabled(true);
+        area.setAntiAliasingEnabled(true);
+        area.setAutoIndentEnabled(true);
         area.setTabSize(4);
+        area.setEditable(false);
         area.setText(contenido);
         area.setCaretPosition(0);
 
-        JButton botonGuardar = new JButton("Guardar...");
+        JButton botonGuardar = new JButton("Guardar .c");
         botonGuardar.addActionListener(e -> guardar());
 
         JButton botonCompilarC = new JButton("Compilar C");
         botonCompilarC.addActionListener(e -> compilarC());
 
-        JPanel panelInferior = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+        JButton botonCopiar = new JButton("Copiar");
+        botonCopiar.addActionListener(e -> { area.selectAll(); area.copy(); area.select(0, 0); });
+
+        JPanel panelInferior = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 8));
+        panelInferior.add(botonCopiar);
         panelInferior.add(botonGuardar);
         panelInferior.add(botonCompilarC);
 
+        RTextScrollPane scrollPane = new RTextScrollPane(area);
+        scrollPane.setLineNumbersEnabled(true);
+        scrollPane.setFoldIndicatorEnabled(true);
+
         setLayout(new BorderLayout());
-        add(new JScrollPane(area), BorderLayout.CENTER);
+        add(scrollPane, BorderLayout.CENTER);
         add(panelInferior, BorderLayout.SOUTH);
 
-        setPreferredSize(new Dimension(850, 500));
-        setMinimumSize(new Dimension(400, 250));
+        setPreferredSize(new Dimension(950, 600));
+        setMinimumSize(new Dimension(500, 300));
         pack();
         setLocationRelativeTo(propietario);
         setDefaultCloseOperation(DISPOSE_ON_CLOSE);
@@ -62,7 +73,6 @@ public class VentanaCodigoC extends JDialog {
     private void guardar() {
         JFileChooser chooser = new JFileChooser();
         chooser.setDialogTitle("Guardar código C");
-        // Default a la carpeta del proyecto si existe
         if (carpetaProyecto != null && carpetaProyecto.isDirectory()) {
             chooser.setCurrentDirectory(carpetaProyecto);
         }
@@ -72,9 +82,8 @@ public class VentanaCodigoC extends JDialog {
             try {
                 Files.writeString(destino.toPath(), area.getText(), StandardCharsets.UTF_8);
                 JOptionPane.showMessageDialog(this, "Guardado: " + destino.getAbsolutePath());
-            } catch (java.io.IOException ex) {
-                JOptionPane.showMessageDialog(this, "No se pudo guardar el archivo.",
-                        "Error", JOptionPane.ERROR_MESSAGE);
+            } catch (IOException ex) {
+                JOptionPane.showMessageDialog(this, "No se pudo guardar el archivo.", "Error", JOptionPane.ERROR_MESSAGE);
             }
         }
     }
@@ -85,7 +94,6 @@ public class VentanaCodigoC extends JDialog {
             return;
         }
 
-        // Usar la carpeta del proyecto/build si existe, si no temporal
         File baseDir;
         if (carpetaProyecto != null && carpetaProyecto.isDirectory()) {
             baseDir = new File(carpetaProyecto, "build");
@@ -124,29 +132,38 @@ public class VentanaCodigoC extends JDialog {
         }
 
         log.agregarInfo("> Compilando C con " + compilador + " en " + baseDir.getAbsolutePath() + "...");
-        try {
-            ProcessBuilder pb = new ProcessBuilder(cmd);
-            pb.directory(baseDir);
-            pb.redirectErrorStream(true);
-            Process proc = pb.start();
-            StringBuilder salida = new StringBuilder();
-            try (BufferedReader br = new BufferedReader(new InputStreamReader(proc.getInputStream()))) {
-                String linea;
-                while ((linea = br.readLine()) != null) {
-                    salida.append(linea).append('\n');
+        new Thread(() -> {
+            try {
+                ProcessBuilder pb = new ProcessBuilder(cmd);
+                pb.directory(baseDir);
+                pb.redirectErrorStream(true);
+                Process proc = pb.start();
+
+                StringBuilder salida = new StringBuilder();
+                try (BufferedReader br = new BufferedReader(new InputStreamReader(proc.getInputStream(), StandardCharsets.UTF_8))) {
+                    String linea;
+                    while ((linea = br.readLine()) != null) {
+                        salida.append(linea).append('\n');
+                    }
                 }
+                int exit = proc.waitFor();
+
+                String out = salida.toString().trim();
+                int finalExit = exit;
+                String finalOut = out;
+                javax.swing.SwingUtilities.invokeLater(() -> {
+                    if (finalExit == 0) {
+                        log.agregarExito("Compilación C exitosa. Ejecutable: " + exeFile.getAbsolutePath());
+                        if (!finalOut.isEmpty()) log.agregarInfo(finalOut);
+                    } else {
+                        log.agregarError("Error compilando C (código " + finalExit + "):");
+                        if (!finalOut.isEmpty()) log.agregarError(finalOut);
+                    }
+                });
+            } catch (IOException | InterruptedException ex) {
+                javax.swing.SwingUtilities.invokeLater(() -> log.agregarError("Excepción compilando C: " + ex.getMessage()));
             }
-            int exit = proc.waitFor();
-            if (exit == 0) {
-                log.agregarExito("Compilación C exitosa. Ejecutable: " + exeFile.getAbsolutePath());
-                if (salida.length() > 0) log.agregarInfo(salida.toString().trim());
-            } else {
-                log.agregarError("Error compilando C (código " + exit + "):");
-                if (salida.length() > 0) log.agregarError(salida.toString().trim());
-            }
-        } catch (IOException | InterruptedException ex) {
-            log.agregarError("Excepción compilando C: " + ex.getMessage());
-        }
+        }).start();
     }
 
     private String detectarCompilador() {

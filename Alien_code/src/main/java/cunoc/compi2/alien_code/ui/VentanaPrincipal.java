@@ -17,6 +17,7 @@ import cunoc.compi2.alien_code.ast.program.ProgramNode;
 import cunoc.compi2.alien_code.c3d.cuartetas.Cuarteta;
 import cunoc.compi2.alien_code.c3d.access.MemoryAccess;
 import cunoc.compi2.alien_code.codegen.CCodeGenerator;
+import cunoc.compi2.alien_code.codegen.riscv.RiscVCodeGenerator;
 import cunoc.compi2.alien_code.errors.ErrorListener;
 import cunoc.compi2.alien_code.ir.IntermediateCodeGenerator;
 import cunoc.compi2.alien_code.pigLatin.astbuilder.PigLatinASTBuilder;
@@ -31,16 +32,15 @@ public class VentanaPrincipal extends JFrame {
     private static final String[] COLUMNAS_ERRORES = {"Tipo", "Descripción", "Línea", "Columna"};
     private static final String[] COLUMNAS_SIMBOLOS = {"Nombre", "Tipo", "Clase", "Tamaño", "Valor", "Línea"};
     private static final String[] COLUMNAS_CUARTETAS = {"#", "Operador", "Operando1", "Operando2", "Resultado"};
-    private static final String[] COLUMNAS_C3D = {"#", "Instrucción"};
 
     private final MainPanel mainPanel;
     private final VentanaMenuBar menuBar;
     private final VentanaReporte ventanaErrores;
     private final VentanaReporte ventanaSimbolos;
     private final VentanaReporte ventanaCuartetas;
-    private final VentanaReporte ventanaC3D;
     private File carpetaProyecto;
     private String codigoCActual;
+    private String codigoRiscVActual;
 
     public VentanaPrincipal() {
         super("3DAlien - Compilador de Y?, Zetariano y Pig Latin");
@@ -62,7 +62,6 @@ public class VentanaPrincipal extends JFrame {
         ventanaErrores = new VentanaReporte(this, "Reporte de errores", COLUMNAS_ERRORES);
         ventanaSimbolos = new VentanaReporte(this, "Tabla de símbolos", COLUMNAS_SIMBOLOS);
         ventanaCuartetas = new VentanaReporte(this, "Cuartetas", COLUMNAS_CUARTETAS);
-        ventanaC3D = new VentanaReporte(this, "Código C3D", COLUMNAS_C3D);
 
         arbolProyecto.setListenerArchivo(archivo -> mainPanel.getEditorTabs().abrirArchivo(archivo));
 
@@ -79,8 +78,8 @@ public class VentanaPrincipal extends JFrame {
         menuBar.setOnVerErrores(e -> ventanaErrores.setVisible(true));
         menuBar.setOnVerSimbolos(e -> ventanaSimbolos.setVisible(true));
         menuBar.setOnVerCuartetas(e -> ventanaCuartetas.setVisible(true));
-        menuBar.setOnVerC3D(e -> ventanaC3D.setVisible(true));
         menuBar.setOnVerCodigoC(e -> verCodigoC(log));
+        menuBar.setOnVerCodigoRISCV(e -> verCodigoRISCV(log));
         menuBar.setOnAcercaDe(e -> acercaDe());
     }
 
@@ -138,11 +137,6 @@ public class VentanaPrincipal extends JFrame {
         ventanaErrores.limpiar();
         ventanaSimbolos.limpiar();
 
-        if (carpetaProyecto == null) {
-            log.agregarError("No hay proyecto abierto. Abre una carpeta de proyecto primero.");
-            return;
-        }
-
         EditorPanel editor = mainPanel.getEditorTabs().getEditorSeleccionado();
         if (editor == null || editor.getArchivo() == null) {
             log.agregarError("No hay archivo abierto en el editor.");
@@ -153,6 +147,14 @@ public class VentanaPrincipal extends JFrame {
         if (!archivo.getName().toLowerCase().endsWith(".pig")) {
             log.agregarError("El archivo activo no es un .pig (" + archivo.getName() + ").");
             return;
+        }
+
+        // Siempre sincronizar carpeta de proyecto con el archivo actual (como el harness)
+        File nuevaCarpeta = archivo.getParentFile();
+        if (carpetaProyecto == null || !carpetaProyecto.equals(nuevaCarpeta)) {
+            carpetaProyecto = nuevaCarpeta;
+            mainPanel.getArbolProyecto().setRaizProyecto(carpetaProyecto);
+            mainPanel.getPanelLog().agregar("Proyecto sincronizado: " + carpetaProyecto.getAbsolutePath());
         }
 
         String contenido = editor.getText();
@@ -290,12 +292,11 @@ public class VentanaPrincipal extends JFrame {
             filasCuartetas.add(new Object[]{++contador, cuarteta.operator(),
                 textoDe(cuarteta.getOperand1()), textoDe(cuarteta.getOperand2()),
                 textoDe(cuarteta.getResult())});
-        }
+}
         ventanaCuartetas.setDatos(filasCuartetas);
         log.agregarExito("Cuartetas generadas: " + contador
             + ". Ver Reportes > Ver cuartetas.");
 
-        ventanaC3D.limpiar();
         List<Object[]> filasC3D = new ArrayList<>();
         int numeroC3D = 0;
         StringBuilder linea = new StringBuilder();
@@ -304,11 +305,12 @@ public class VentanaPrincipal extends JFrame {
             instruccion.toCCode(linea);
             filasC3D.add(new Object[]{++numeroC3D, linea.toString()});
         }
-        ventanaC3D.setDatos(filasC3D);
         codigoCActual = new CCodeGenerator().generate(instrucciones,
                 analizador.getSymbolTable(), generador.getTiposTemporales(), generador.getLayouts());
-        log.agregarExito("C3D generado (" + numeroC3D + " instrucciones). Ver Reportes > Ver C3D.");
-        log.agregarExito("Código C generado. Ver Reportes > Ver código C.");
+        codigoRiscVActual = new RiscVCodeGenerator().generate(instrucciones,
+                analizador.getSymbolTable(), generador.getTiposTemporales(), generador.getLayouts());
+        log.agregarExito("C\u00f3digo C generado (" + numeroC3D + " instrucciones). Ver Reportes > Ver c\u00f3digo C.");
+        log.agregarExito("C\u00f3digo RISC-V generado. Ver Reportes > Ver c\u00f3digo RISC-V generado.");
     }
 
     private String textoDe(MemoryAccess acceso) {
@@ -405,6 +407,15 @@ public class VentanaPrincipal extends JFrame {
             return;
         }
         VentanaCodigoC ventana = new VentanaCodigoC(this, "Código C generado", codigoCActual, log, carpetaProyecto);
+        ventana.setVisible(true);
+    }
+
+    private void verCodigoRISCV(PanelLog log) {
+        if (codigoRiscVActual == null) {
+            log.agregarPendiente("Compila un archivo primero para generar código RISC-V.");
+            return;
+        }
+        VentanaCodigoRISCV ventana = new VentanaCodigoRISCV(this, "Código RISC-V generado", codigoRiscVActual, log, carpetaProyecto);
         ventana.setVisible(true);
     }
 
