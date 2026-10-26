@@ -40,6 +40,7 @@ public class PanelArbolProyecto extends JPanel {
         arbol.setRootVisible(true);
         arbol.setCellRenderer(new RendererArbol());
         arbol.setShowsRootHandles(true);
+        javax.swing.ToolTipManager.sharedInstance().registerComponent(arbol);
 
         arbol.addMouseListener(new java.awt.event.MouseAdapter() {
             @Override
@@ -271,6 +272,8 @@ public class PanelArbolProyecto extends JPanel {
                 Object obj = nodo.getUserObject();
                 if (obj instanceof File f) {
                     setIcon(iconoPara(f));
+                    setText(f.getName());
+                    setToolTipText(f.getPath());
                 }
             }
             return this;

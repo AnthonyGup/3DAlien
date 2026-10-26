@@ -5,19 +5,16 @@ import cunoc.compi2.alien_code.ast.Type;
 import cunoc.compi2.alien_code.errors.ErrorListener;
 import cunoc.compi2.alien_code.errors.ErrorType;
 
-import java.util.Deque;
-import java.util.LinkedList;
-
 public class ContextoSemanticoImpl implements ContextoSemantico {
     private final SymbolTable symbolTable;
     private final ErrorListener errorListener;
     private int loopDepth;
     private int switchDepth;
-    private final Deque<Type> pilaRetornos = new LinkedList<>();
-    private final Deque<Scope> pilaClases = new LinkedList<>();
-    private final Deque<Symbol> pilaClaseSymbol = new LinkedList<>();
+    private final Pila<Type> pilaRetornos = new Pila<>();
+    private final Pila<Scope> pilaClases = new Pila<>();
+    private final Pila<Symbol> pilaClaseSymbol = new Pila<>();
     private int rutinaDepth = 0;
-    private final Deque<Boolean> pilaConstructor = new LinkedList<>();
+    private final Pila<Boolean> pilaConstructor = new Pila<>();
     private String archivoActual;
 
     public ContextoSemanticoImpl(SymbolTable symbolTable, ErrorListener errorListener) {
@@ -81,19 +78,17 @@ public class ContextoSemanticoImpl implements ContextoSemantico {
 
     @Override
     public void pushTipoRetorno(Type tipo) {
-        pilaRetornos.push(tipo);
+        pilaRetornos.empujar(tipo);
     }
 
     @Override
     public void popTipoRetorno() {
-        if (!pilaRetornos.isEmpty()) {
-            pilaRetornos.pop();
-        }
+        pilaRetornos.sacar();
     }
 
     @Override
     public Type tipoRetornoActual() {
-        return pilaRetornos.isEmpty() ? null : pilaRetornos.peek();
+        return pilaRetornos.tope();
     }
 
     @Override
@@ -118,48 +113,44 @@ public class ContextoSemanticoImpl implements ContextoSemantico {
 
     @Override
     public void pushClaseActual(Scope miembros) {
-        pilaClases.push(miembros);
+        pilaClases.empujar(miembros);
     }
 
     @Override
     public void popClaseActual() {
-        if (!pilaClases.isEmpty()) {
-            pilaClases.pop();
-        }
+        pilaClases.sacar();
     }
 
     @Override
     public Scope ambitoDeClaseActual() {
-        return pilaClases.isEmpty() ? null : pilaClases.peek();
+        return pilaClases.tope();
     }
 
     @Override
     public void entrarClase(Symbol clase) {
-        pilaClaseSymbol.push(clase);
+        pilaClaseSymbol.empujar(clase);
     }
 
     @Override
     public void salirClase() {
-        if (!pilaClaseSymbol.isEmpty()) {
-            pilaClaseSymbol.pop();
-        }
+        pilaClaseSymbol.sacar();
     }
 
     @Override
     public Symbol claseActual() {
-        return pilaClaseSymbol.isEmpty() ? null : pilaClaseSymbol.peek();
+        return pilaClaseSymbol.tope();
     }
 
     @Override
     public void entrarRutina(boolean constructor) {
         rutinaDepth++;
-        pilaConstructor.push(constructor);
+        pilaConstructor.empujar(constructor);
     }
 
     @Override
     public void salirRutina() {
         if (rutinaDepth > 0) rutinaDepth--;
-        if (!pilaConstructor.isEmpty()) pilaConstructor.pop();
+        pilaConstructor.sacar();
     }
 
     @Override
@@ -169,7 +160,7 @@ public class ContextoSemanticoImpl implements ContextoSemantico {
 
     @Override
     public boolean enConstructor() {
-        return !pilaConstructor.isEmpty() && pilaConstructor.peek();
+        return Boolean.TRUE.equals(pilaConstructor.tope());
     }
 
     @Override

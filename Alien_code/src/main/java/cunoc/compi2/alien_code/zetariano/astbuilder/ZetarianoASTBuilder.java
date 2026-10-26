@@ -37,6 +37,7 @@ import cunoc.compi2.alien_code.ast.stmt.IfNode;
 import cunoc.compi2.alien_code.ast.stmt.IncrementNode;
 import cunoc.compi2.alien_code.ast.stmt.ReturnNode;
 import cunoc.compi2.alien_code.ast.stmt.SuperCallNode;
+import cunoc.compi2.alien_code.ast.stmt.SuperMetodoNode;
 import cunoc.compi2.alien_code.ast.stmt.SwitchNode;
 import cunoc.compi2.alien_code.ast.stmt.VariableDeclNode;
 import cunoc.compi2.alien_code.ast.stmt.WhileNode;
@@ -194,6 +195,7 @@ public class ZetarianoASTBuilder extends ZetarianoBaseVisitor<Node> {
         if (ctx.doWhileClasico() != null) return visitDoWhileClasico(ctx.doWhileClasico());
         if (ctx.retorno() != null) return visitRetorno(ctx.retorno());
         if (ctx.superLlamada() != null) return visitSuperLlamada(ctx.superLlamada());
+        if (ctx.superMetodo() != null) return visitSuperMetodo(ctx.superMetodo());
         if (ctx.BREAK() != null) return new BreakNode(line(ctx), column(ctx));
         if (ctx.CONTINUE() != null) return new ContinueNode(line(ctx), column(ctx));
         if (ctx.bloque() != null) return bloqueDe(ctx.bloque());
@@ -261,6 +263,12 @@ public class ZetarianoASTBuilder extends ZetarianoBaseVisitor<Node> {
     @Override
     public Node visitSuperLlamada(ZetarianoParser.SuperLlamadaContext ctx) {
         return new SuperCallNode(argumentosDe(ctx.argumentos()), line(ctx), column(ctx));
+    }
+
+    @Override
+    public Node visitSuperMetodo(ZetarianoParser.SuperMetodoContext ctx) {
+        return new SuperMetodoNode(ctx.IDENTIFICADOR().getText(),
+                argumentosDe(ctx.argumentos()), line(ctx), column(ctx));
     }
 
     @Override
