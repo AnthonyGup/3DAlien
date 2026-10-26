@@ -18,29 +18,31 @@ public final class RiscVFormato {
         if (formato.startsWith("\"")) {
             formato = formato.substring(1);
         }
-        if (formato.endsWith("\"") && !formato.endsWith("\\\"")) {
+        if (formato.endsWith("\"") && !formato.endsWith("\\\"") && !formato.isEmpty()) {
             formato = formato.substring(0, formato.length() - 1);
         }
+        String dec = ContextoRiscV.decodificarEscapes(formato);
+
         List<Trozo> trozos = new ArrayList<>();
         StringBuilder texto = new StringBuilder();
         int i = 0;
-        while (i < formato.length()) {
-            char ch = formato.charAt(i);
+        while (i < dec.length()) {
+            char ch = dec.charAt(i);
             if (ch != '%') {
                 texto.append(ch);
                 i++;
                 continue;
             }
-            if (i + 1 < formato.length() && formato.charAt(i + 1) == '%') {
+            if (i + 1 < dec.length() && dec.charAt(i + 1) == '%') {
                 texto.append('%');
                 i += 2;
                 continue;
             }
             int j = i + 1;
-            while (j < formato.length() && !esEspecificador(formato.charAt(j))) {
+            while (j < dec.length() && !esEspecificador(dec.charAt(j))) {
                 j++;
             }
-            if (j >= formato.length()) {
+            if (j >= dec.length()) {
                 texto.append(ch);
                 i++;
                 continue;
@@ -49,7 +51,7 @@ public final class RiscVFormato {
                 trozos.add(new Trozo(TipoTrozo.TEXTO, texto.toString()));
                 texto.setLength(0);
             }
-            trozos.add(new Trozo(TipoTrozo.ESPECIFICADOR, "%" + formato.charAt(j)));
+            trozos.add(new Trozo(TipoTrozo.ESPECIFICADOR, "%" + dec.charAt(j)));
             i = j + 1;
         }
         if (texto.length() > 0) {

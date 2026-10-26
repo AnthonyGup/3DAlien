@@ -3,9 +3,11 @@ package cunoc.compi2.alien_code.codegen.riscv;
 import cunoc.compi2.alien_code.ast.Type;
 import cunoc.compi2.alien_code.c3d.access.Literal3D;
 import cunoc.compi2.alien_code.c3d.access.MemoryAccess;
+import cunoc.compi2.alien_code.c3d.access.NameAccess;
 import cunoc.compi2.alien_code.c3d.cuartetas.Asignacion3D;
 import cunoc.compi2.alien_code.c3d.cuartetas.Condicional3D;
 import cunoc.compi2.alien_code.c3d.cuartetas.Cuarteta;
+import cunoc.compi2.alien_code.c3d.cuartetas.DeclararArreglo3D;
 import cunoc.compi2.alien_code.c3d.cuartetas.Imprimir3D;
 import cunoc.compi2.alien_code.c3d.cuartetas.Leer3D;
 import cunoc.compi2.alien_code.c3d.cuartetas.Llamada3D;
@@ -17,12 +19,14 @@ import cunoc.compi2.alien_code.ir.NombresInternos;
 import cunoc.compi2.alien_code.semantic.Symbol;
 import cunoc.compi2.alien_code.semantic.SymbolTable;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public final class ContextoRiscV {
     private final StringBuilder datos = new StringBuilder();
@@ -33,36 +37,31 @@ public final class ContextoRiscV {
     private final SymbolTable tabla;
     private final Map<Integer, String> tiposTemporales;
     private final ClaseLayouts layouts;
+
     private final Map<String, Symbol> simbolosPorNombre = new LinkedHashMap<>();
     private final Map<String, Map<String, Integer>> camposPorTipo = new HashMap<>();
-    private final Map<Llamada3D, Integer> retIds = new IdentityHashMap<>();
-    private final Map<LlamadaVirtual3D, Integer> retIdsVirt = new IdentityHashMap<>();
-    private int retCounter;
-    private int totalGlobalesBytes;
 
-    // Nuevo: offset en bytes para cada operando
-    private final Map<MemoryAccess, Integer> offsetBytes = new IdentityHashMap<>();
-    // Nuevo: tipo RV para cada operando
     private final Map<MemoryAccess, TipoRV> tipoRV = new IdentityHashMap<>();
 
-    // Marcos por función
     private final Map<String, MarcoRiscV> marcos = new LinkedHashMap<>();
     private MarcoRiscV marcoActual;
+    private List<Cuarteta> cuerpoActual;
 
-    // Offsets de globales en bytes
     private final Map<String, Integer> offsetGlobalBytes = new LinkedHashMap<>();
+    private int maxGlobalSlot = -1;
+    private int totalGlobalesBytes;
 
-    // Etiquetas de cadena
     private final Map<String, String> etiquetaCadena = new LinkedHashMap<>();
-    private int nextStrLabel = 0;
-
-    // Offsets de constantes double
     private final Map<String, String> etiquetaConstante = new LinkedHashMap<>();
-    private int nextConstLabel = 0;
-
-    // Offsets de formatos
     private final Map<String, String> etiquetaFormato = new LinkedHashMap<>();
+
+    private final Set<String> funcionesDefinidas = new java.util.LinkedHashSet<>();
+    private final Set<String> llamadasUsuario = new java.util.LinkedHashSet<>();
+
+    private int nextStrLabel = 0;
+    private int nextConstLabel = 0;
     private int nextFmtLabel = 0;
+    private int nextVirtualSite = 0;
 
     public ContextoRiscV(List<Cuarteta> todas, SymbolTable tabla, Map<Integer, String> tiposTemporales,
             ClaseLayouts layouts) {
@@ -73,7 +72,6 @@ public final class ContextoRiscV {
     }
 
     public void indexar() {
-        // 1. Indexar símbolos globales y calcular offsets en bytes
         if (tabla != null) {
             for (Symbol s : tabla.todosLosSimbolos()) {
                 simbolosPorNombre.putIfAbsent(s.getName() + "#" + s.getKind(), s);
@@ -82,16 +80,12 @@ public final class ContextoRiscV {
             int cursor = 0;
             for (Symbol s : tabla.listarGlobales()) {
                 if (s.getKind() == Symbol.Kind.VARIABLE && !s.isField() && s.getOffset() >= 0) {
-                    TipoRV t = TipoRV.desde(s.getType());
-                    cursor = OffsetsBytes.alinear(cursor, t.alineacion);
-                    offsetGlobalBytes.put(s.getName(), cursor);
-                    cursor += t.tamano;
+                    maxGlobalSlot = Math.max(maxGlobalSlot, s.getOffset());
                 }
             }
-            totalGlobalesBytes = (cursor + 15) & ~15; // alinear a 16
+            totalGlobalesBytes = Math.max(16, (maxGlobalSlot + 1) * 8);
         }
 
-        // 2. Recoger literales de cadena, constantes y formatos de todas las cuartetas
         for (Cuarteta c : todas) {
             for (MemoryAccess op : operandosDe(c)) {
                 registrarLiteral(op);
@@ -104,9 +98,9 @@ public final class ContextoRiscV {
         String txt = lit.getTexto();
         if (txt == null) return;
 
-        // Cadenas
         if (lit.getTipo() == Type.STRING && txt.startsWith("\"")) {
-            etiquetaCadena.putIfAbsent(txt, "str_" + nextStrLabel++);
+            String decoded = decodificarEscapes(txt.substring(1, txt.length() - 1));
+            etiquetaCadena.putIfAbsent(decoded, "str_" + nextStrLabel++);
         } else if (txt.indexOf('"') >= 0) {
             int i = 0;
             while (i < txt.length()) {
@@ -114,25 +108,15 @@ public final class ContextoRiscV {
                 if (abre < 0) break;
                 int cierra = txt.indexOf('"', abre + 1);
                 if (cierra < 0) break;
-                String s = txt.substring(abre, cierra + 1);
-                etiquetaCadena.putIfAbsent(s, "str_" + nextStrLabel++);
+                String s = txt.substring(abre + 1, cierra);
+                String decoded = decodificarEscapes(s);
+                etiquetaCadena.putIfAbsent(decoded, "str_" + nextStrLabel++);
                 i = cierra + 1;
             }
         }
 
-        // Constantes double (decimal o científica)
         if (txt.matches("^[+-]?(\\d+\\.\\d*|\\.\\d+|\\d+)([eE][+-]?\\d+)?$")) {
             etiquetaConstante.putIfAbsent(txt, "dbl_" + nextConstLabel++);
-        }
-    }
-
-    public void asignarRetIds() {
-        for (Cuarteta c : todas) {
-            if (c instanceof Llamada3D lam && lam.isUsuario()) {
-                retIds.put(lam, ++retCounter);
-            } else if (c instanceof LlamadaVirtual3D virt) {
-                retIdsVirt.put(virt, ++retCounter);
-            }
         }
     }
 
@@ -160,6 +144,7 @@ public final class ContextoRiscV {
             ops.add(r.getResult());
         } else if (c instanceof Retornar3D r) {
             ops.add(r.getOperand1());
+        } else if (c instanceof DeclararArreglo3D) {
         }
         return ops;
     }
@@ -195,6 +180,8 @@ public final class ContextoRiscV {
         return null;
     }
 
+    public ClaseLayouts layouts() { return layouts; }
+
     public Symbol simbolo(String nombre) {
         return simbolosPorNombre.get(nombre);
     }
@@ -203,12 +190,6 @@ public final class ContextoRiscV {
         return "Lf_" + NombresInternos.sanitizar(nombre == null ? "" : nombre);
     }
 
-    // Getters nuevos
-    public int totalGlobalesBytes() { return totalGlobalesBytes; }
-    public Map<Integer, String> tiposTemporales() { return tiposTemporales; }
-    public ClaseLayouts layouts() { return layouts; }
-    public Map<Llamada3D, Integer> retIds() { return retIds; }
-    public Map<LlamadaVirtual3D, Integer> retIdsVirt() { return retIdsVirt; }
     public StringBuilder datos() { return datos; }
     public StringBuilder texto() { return texto; }
     public List<String> errores() { return errores; }
@@ -217,27 +198,50 @@ public final class ContextoRiscV {
     public void emitirDato(String linea) { datos.append(linea).append('\n'); }
     public void error(String mensaje) { errores.add(mensaje); }
 
-    // Offsets y tipos por operando
-    public void setOffset(MemoryAccess op, int off) { offsetBytes.put(op, off); }
-    public int getOffset(MemoryAccess op) { return offsetBytes.getOrDefault(op, -1); }
     public void setTipoRV(MemoryAccess op, TipoRV t) { tipoRV.put(op, t); }
     public TipoRV getTipoRV(MemoryAccess op) {
         if (op instanceof cunoc.compi2.alien_code.c3d.access.TemporalAccess ta) {
             String ctype = tiposTemporales.get(ta.getNumero());
-            return TipoRV.desdeString(ctype);
+            if (ctype != null) return TipoRV.desdeString(ctype);
         }
-        return tipoRV.getOrDefault(op, TipoRV.ENTERO);
+        if (tipoRV.containsKey(op)) return tipoRV.get(op);
+
+        if (op instanceof NameAccess na) {
+            if ("self".equals(na.getNombre())) return TipoRV.REF;
+            Type t = na.getTipo();
+            if (t != null) return TipoRV.desde(t);
+            Symbol s = simbolo(na.getNombre());
+            if (s != null) return TipoRV.desde(s.getType());
+            return TipoRV.REF;
+        }
+        if (op instanceof Literal3D lit) {
+            String txt = lit.getTexto() == null ? "" : lit.getTexto().trim();
+            if (txt.startsWith("\"") || "NULL".equals(txt) || "H".equals(txt) || "S".equals(txt)
+                    || txt.startsWith("&(") || txt.startsWith("{") || "self".equals(txt)) return TipoRV.REF;
+            if (txt.matches("^[+-]?\\d+$")) return TipoRV.ENTERO;
+            if (txt.indexOf('.') >= 0 || txt.matches("^[+-]?\\d+[eE][+-]?\\d+$")) return TipoRV.DOBLE;
+            return TipoRV.ENTERO;
+        }
+        if (op instanceof cunoc.compi2.alien_code.c3d.access.CampoAccess ca) {
+            return TipoRV.desde(ca.getTipo());
+        }
+        if (op instanceof cunoc.compi2.alien_code.c3d.access.IndiceAccess ia) {
+            return TipoRV.desde(ia.getTipo());
+        }
+        return TipoRV.ENTERO;
     }
 
-    // Marco actual
     public void setMarcoActual(MarcoRiscV m) { marcoActual = m; }
     public MarcoRiscV getMarcoActual() { return marcoActual; }
     public Map<String, MarcoRiscV> marcos() { return marcos; }
 
-    // Globales
-    public int getOffsetGlobal(String nombre) { return offsetGlobalBytes.getOrDefault(nombre, -1); }
+    public int getOffsetGlobal(String nombre) {
+        return offsetGlobalBytes.getOrDefault(nombre, -1);
+    }
 
-    // Cadenas/constantes/formatos
+    public int maxGlobalSlot() { return maxGlobalSlot; }
+    public int totalGlobalesBytes() { return totalGlobalesBytes; }
+
     public String etiquetaCadena(String literal) { return etiquetaCadena.get(literal); }
     public String etiquetaConstante(String texto) { return etiquetaConstante.get(texto); }
     public String etiquetaFormato(String texto) { return etiquetaFormato.get(texto); }
@@ -246,8 +250,137 @@ public final class ContextoRiscV {
     public Map<String, String> etiquetasConstante() { return etiquetaConstante; }
     public Map<String, String> etiquetasFormato() { return etiquetaFormato; }
 
-    // Allocation helpers para strings
     public String nuevaEtiquetaCadena() { return "str_" + nextStrLabel++; }
     public String nuevaEtiquetaConstante() { return "dbl_" + nextConstLabel++; }
     public String nuevaEtiquetaFormato() { return "fmt_" + nextFmtLabel++; }
+
+    public void setCuerpoActual(List<Cuarteta> cuerpo) { cuerpoActual = cuerpo; }
+    public List<Cuarteta> getCuerpoActual() { return cuerpoActual; }
+
+    public int slotLocal(MemoryAccess op) {
+        if (op instanceof NameAccess na) {
+            if (!na.isGlobal() && !na.isAutoreferencia()) return na.getOffset();
+        }
+        if (op instanceof cunoc.compi2.alien_code.c3d.access.TemporalAccess ta) {
+            return ta.getOffset();
+        }
+        return -1;
+    }
+
+    public int globalByte(int slot) { return slot * 8; }
+
+    public int slotByte(int slot) {
+        return -(12 + 8 * slot);
+    }
+
+    public int campoOffset(String clase, String campo) {
+        if (layouts != null && layouts.contiene(clase)) {
+            return layouts.offsetCampo(clase, campo) * 8;
+        }
+        Map<String, Integer> mapa = camposPorTipo.get(clase);
+        Integer o = mapa != null ? mapa.get(campo) : null;
+        return o != null ? o * 8 : -1;
+    }
+
+    public String registrarCadena(String texto) {
+        return etiquetaCadena.computeIfAbsent(texto, k -> "str_" + nextStrLabel++);
+    }
+
+    public String registrarConstante(String texto) {
+        return etiquetaConstante.computeIfAbsent(texto, k -> "dbl_" + nextConstLabel++);
+    }
+
+    public String registrarFormato(String texto) {
+        return etiquetaFormato.computeIfAbsent(texto, k -> "fmt_" + nextFmtLabel++);
+    }
+
+    public TipoRV campoTipoDe(String tipoNombre, int idx) {
+        Symbol ts = buscarTipo(tipoNombre);
+        if (ts != null && ts.getMiembros() != null) {
+            int i = 0;
+            for (Symbol f : ts.getMiembros().getTodos()) {
+                if (f.getKind() == Symbol.Kind.VARIABLE) {
+                    if (i == idx) return TipoRV.desde(f.getType());
+                    i++;
+                }
+            }
+        }
+        return TipoRV.ENTERO;
+    }
+
+    public NameAccess accesoDeNombre(String nombre) {
+        if (cuerpoActual == null || nombre == null) return null;
+        for (Cuarteta c : cuerpoActual) {
+            for (MemoryAccess op : operandosDe(c)) {
+                NameAccess na = buscarNombre(op, nombre);
+                if (na != null) return na;
+            }
+        }
+        return null;
+    }
+
+    private NameAccess buscarNombre(MemoryAccess op, String nombre) {
+        if (op instanceof NameAccess na && nombre.equals(na.getNombre()) && !na.isAutoreferencia()) {
+            return na;
+        }
+        if (op instanceof cunoc.compi2.alien_code.c3d.access.CampoAccess ca) {
+            return buscarNombre(ca.getBase(), nombre);
+        }
+        if (op instanceof cunoc.compi2.alien_code.c3d.access.IndiceAccess ia) {
+            NameAccess r = buscarNombre(ia.getBase(), nombre);
+            return r != null ? r : buscarNombre(ia.getIndice(), nombre);
+        }
+        return null;
+    }
+
+    public int siguienteSitioVirtual() {
+        return nextVirtualSite++;
+    }
+
+    public void registrarFuncion(String nombre) {
+        funcionesDefinidas.add(nombre);
+    }
+
+    public void registrarLlamadaUsuario(String nombre) {
+        llamadasUsuario.add(nombre);
+    }
+
+    public Set<String> getFuncionesDefinidas() { return funcionesDefinidas; }
+    public Set<String> getLlamadasUsuario() { return llamadasUsuario; }
+
+    public static String decodificarEscapes(String s) {
+        StringBuilder out = new StringBuilder();
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c != '\\' || i + 1 >= s.length()) {
+                out.append(c);
+                continue;
+            }
+            char e = s.charAt(++i);
+            switch (e) {
+                case 'n' -> out.append('\n');
+                case 't' -> out.append('\t');
+                case 'r' -> out.append('\r');
+                case '"' -> out.append('"');
+                case '\\' -> out.append('\\');
+                case '\'' -> out.append('\'');
+                case '0' -> out.append('\0');
+                case 'x' -> {
+                    if (i + 2 < s.length()) {
+                        int val = Integer.parseInt(s.substring(i + 1, i + 3), 16);
+                        out.append((char) val);
+                        i += 2;
+                    } else {
+                        out.append('\\').append('x');
+                    }
+                }
+                default -> { out.append('\\').append(e); }
+            }
+        }
+        return out.toString();
+    }
+
+    public static byte[] codificarUTF8(String s) {
+        return s.getBytes(StandardCharsets.UTF_8);
+    }
 }

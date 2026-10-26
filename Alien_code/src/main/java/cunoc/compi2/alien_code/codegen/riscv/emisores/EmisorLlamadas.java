@@ -3,240 +3,118 @@ package cunoc.compi2.alien_code.codegen.riscv.emisores;
 import cunoc.compi2.alien_code.c3d.access.MemoryAccess;
 import cunoc.compi2.alien_code.c3d.cuartetas.Llamada3D;
 import cunoc.compi2.alien_code.c3d.cuartetas.LlamadaVirtual3D;
+import cunoc.compi2.alien_code.codegen.riscv.AccesoMemoria;
+import cunoc.compi2.alien_code.codegen.riscv.ConvencionLlamada;
 import cunoc.compi2.alien_code.codegen.riscv.ContextoRiscV;
-import cunoc.compi2.alien_code.codegen.riscv.MarcoRiscV;
 import cunoc.compi2.alien_code.codegen.riscv.TipoRV;
+import cunoc.compi2.alien_code.ir.ClaseLayout;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public final class EmisorLlamadas {
     private final ContextoRiscV ctx;
+    private final EmisorMemoria memoria;
 
-    public EmisorLlamadas(ContextoRiscV ctx) {
+    public EmisorLlamadas(ContextoRiscV ctx, EmisorMemoria memoria) {
         this.ctx = ctx;
+        this.memoria = memoria;
     }
 
     public void llamada(Llamada3D lam) {
-        if (!lam.isUsuario()) {
-            nativa(lam);
-            return;
-        }
         String fn = lam.getFuncion();
-        int retId = ctx.retIds().getOrDefault(lam, 0);
+        if (nativa(lam, fn)) return;
         List<MemoryAccess> args = lam.getArgumentos();
-        MarcoRiscV caller = ctx.getMarcoActual();
-
-        // Evaluar argumentos en registros correctos
-        int intArg = 0;
-        int dblArg = 0;
-        for (MemoryAccess arg : args) {
-            TipoRV t = ctx.getTipoRV(arg);
-            if (t == TipoRV.DOBLE) {
-                if (dblArg < 8) {
-                    cargarComo(arg, "fa" + dblArg, t);
-                    dblArg++;
-                } else {
-                    ctx.error("mas de 8 argumentos double no soportado");
-                }
-            } else {
-                if (intArg < 8) {
-                    cargarComo(arg, "a" + intArg, t);
-                    intArg++;
-                } else {
-                    // 9.o en adelante: en pila del caller (sp)
-                    int off = caller.getSalientes(); // ya calculado en marco
-                    // No implementado aún: guardar en 0(sp), 4(sp)...
-                    ctx.emitir("    # FIXME: argumento " + intArg + " en pila");
-                    intArg++;
-                }
-            }
+        List<TipoRV> tipos = new ArrayList<>();
+        for (MemoryAccess a : args) tipos.add(ctx.getTipoRV(a));
+        List<ConvencionLlamada.UbicacionArg> ubicaciones = ConvencionLlamada.asignar(tipos);
+        for (int i = 0; i < args.size(); i++) {
+            cargarArgumento(args.get(i), tipos.get(i), ubicaciones.get(i));
         }
-
-        // Llamar
+        ctx.registrarLlamadaUsuario(fn);
         ctx.emitir("    jal ra, " + ctx.etiquetaFuncion(fn));
+        guardarRetorno(lam.getResult());
+    }
 
-        // Guardar retorno INMEDIATAMENTE
-        if (lam.getResult() != null) {
-            TipoRV tRes = ctx.getTipoRV(lam.getResult());
-            if (tRes == TipoRV.DOBLE) {
-                ctx.emitir("    fsd fa0, " + offset(lam.getResult()) + "(s0)");
-            } else {
-                ctx.emitir("    sw a0, " + offset(lam.getResult()) + "(s0)");
+    private boolean nativa(Llamada3D lam, String fn) {
+        List<MemoryAccess> args = lam.getArgumentos();
+        switch (fn == null ? "" : fn) {
+            case "conc" -> {
+                if (args.size() > 0) memoria.cargarEntero(args.get(0), "a0");
+                if (args.size() > 1) memoria.cargarEntero(args.get(1), "a1");
+                ctx.emitir("    jal ra, rt_conc");
             }
+            case "strd" -> {
+                if (!args.isEmpty()) memoria.cargarEntero(args.get(0), "a0");
+                ctx.emitir("    jal ra, rt_strd");
+            }
+            case "strn" -> {
+                if (!args.isEmpty()) memoria.cargarDouble(args.get(0), "fa0");
+                ctx.emitir("    jal ra, rt_strn");
+            }
+            case "strc" -> {
+                if (!args.isEmpty()) memoria.cargarEntero(args.get(0), "a0");
+                ctx.emitir("    jal ra, rt_strc");
+            }
+            default -> { return false; }
         }
+        guardarRetorno(lam.getResult());
+        return true;
     }
 
     public void virtual(LlamadaVirtual3D virt) {
-        MemoryAccess receptor = virt.getReceptor();
-        List<MemoryAccess> args = virt.getArgumentos();
-        MemoryAccess destino = virt.getDestino();
+        List<TipoRV> tipos = new ArrayList<>();
+        tipos.add(TipoRV.REF);
+        for (MemoryAccess a : virt.getArgumentos()) tipos.add(ctx.getTipoRV(a));
+        List<ConvencionLlamada.UbicacionArg> ubicaciones = ConvencionLlamada.asignar(tipos);
 
-        // Cargar receptor en a0
-        cargarComo(receptor, "a0", ctx.getTipoRV(receptor));
-
-        // Argumentos: a1-a7 para enteros, fa1-fa7 para doubles
-        int intArg = 1;
-        int dblArg = 0;
-        for (MemoryAccess arg : args) {
-            TipoRV t = ctx.getTipoRV(arg);
-            if (t == TipoRV.DOBLE) {
-                if (dblArg < 8) {
-                    cargarComo(arg, "fa" + dblArg, t);
-                    dblArg++;
-                }
-            } else {
-                if (intArg < 8) {
-                    cargarComo(arg, "a" + intArg, t);
-                    intArg++;
-                }
-            }
+        memoria.cargarEntero(virt.getReceptor(), "a" + ubicaciones.get(0).indiceReg());
+        for (int i = 0; i < virt.getArgumentos().size(); i++) {
+            cargarArgumento(virt.getArgumentos().get(i), tipos.get(i + 1), ubicaciones.get(i + 1));
         }
 
-        // Despacho: leer id de clase desde offset 0 del objeto
+        int k = ctx.siguienteSitioVirtual();
         ctx.emitir("    lw t1, 0(a0)");
-        boolean hay = false;
-        for (var e : virt.tablaDespacho().entrySet()) {
-            ctx.emitir("    li t2, " + e.getKey());
-            ctx.emitir("    beq t1, t2, " + e.getValue());
-            hay = true;
+        int n = 0;
+        for (ClaseLayout.ImplMetodo impl : virt.getCandidatos()) {
+            ctx.emitir("    li t2, " + impl.claseId);
+            ctx.emitir("    beq t1, t2, Lv" + k + "_c" + n);
+            n++;
         }
-        if (!hay) {
-            ctx.error("tabla de despacho vacia para " + virt.getMetodo());
-            ctx.emitir("    jal ra, rt_error_despacho");
-        } else {
-            // Etiquetas de continuación
-            ctx.emitir("    j Lvirt_fin_" + ctx.retIdsVirt().get(virt));
+        ctx.emitir("    jal ra, rt_error_despacho");
+        n = 0;
+        for (ClaseLayout.ImplMetodo impl : virt.getCandidatos()) {
+            ctx.emitir("Lv" + k + "_c" + n + ":");
+            ctx.emitir("    jal ra, " + impl.etiqueta);
+            ctx.emitir("    j Lv" + k + "_fin");
+            n++;
         }
-
-        // Cada caso termina en Lvirt_fin
-        ctx.emitir("Lvirt_fin_" + ctx.retIdsVirt().get(virt) + ":");
-        if (destino != null) {
-            TipoRV tRes = ctx.getTipoRV(destino);
-            if (tRes == TipoRV.DOBLE) {
-                ctx.emitir("    fsd fa0, " + offset(destino) + "(s0)");
-            } else {
-                ctx.emitir("    sw a0, " + offset(destino) + "(s0)");
-            }
-        }
+        ctx.emitir("Lv" + k + "_fin:");
+        guardarRetorno(virt.getDestino());
     }
 
-    private void nativa(Llamada3D lam) {
-        String nombre = lam.getFuncion() == null ? "" : lam.getFuncion();
-        List<MemoryAccess> args = lam.getArgumentos();
-        switch (nombre) {
-            case "strd" -> {
-                if (!args.isEmpty()) cargarComo(args.get(0), "a0", ctx.getTipoRV(args.get(0)));
-                ctx.emitir("    jal ra, rt_strd");
-                resultado(lam);
-            }
-            case "strn" -> {
-                if (!args.isEmpty()) cargarComo(args.get(0), "fa0", ctx.getTipoRV(args.get(0)));
-                ctx.emitir("    jal ra, rt_strn");
-                resultado(lam);
-            }
-            case "strc" -> {
-                if (!args.isEmpty()) cargarComo(args.get(0), "a0", ctx.getTipoRV(args.get(0)));
-                ctx.emitir("    jal ra, rt_strc");
-                resultado(lam);
-            }
-            case "conc" -> {
-                cargarComo(args.size() > 0 ? args.get(0) : null, "a0", args.size() > 0 ? ctx.getTipoRV(args.get(0)) : TipoRV.REF);
-                cargarComo(args.size() > 1 ? args.get(1) : null, "a1", args.size() > 1 ? ctx.getTipoRV(args.get(1)) : TipoRV.REF);
-                ctx.emitir("    jal ra, rt_conc");
-                resultado(lam);
-            }
-            case "__print_int" -> {
-                if (!args.isEmpty()) cargarComo(args.get(0), "a0", ctx.getTipoRV(args.get(0)));
-                ctx.emitir("    jal ra, rt_print_int");
-            }
-            case "__print_char" -> {
-                if (!args.isEmpty()) cargarComo(args.get(0), "a0", ctx.getTipoRV(args.get(0)));
-                ctx.emitir("    jal ra, rt_print_char");
-            }
-            case "__print_double" -> {
-                if (!args.isEmpty()) cargarComo(args.get(0), "fa0", ctx.getTipoRV(args.get(0)));
-                ctx.emitir("    jal ra, rt_print_g");
-            }
-            case "__print_bool" -> {
-                if (!args.isEmpty()) cargarComo(args.get(0), "a0", ctx.getTipoRV(args.get(0)));
-                ctx.emitir("    jal ra, rt_print_bool");
-            }
-            case "__print_pointer" -> {
-                if (!args.isEmpty()) cargarComo(args.get(0), "a0", ctx.getTipoRV(args.get(0)));
-                ctx.emitir("    jal ra, rt_print_ptr");
-            }
-            default -> {
-                if (lam.getResult() != null) {
-                    guardarInmediato(lam.getResult(), 0);
+    private void cargarArgumento(MemoryAccess arg, TipoRV tipo, ConvencionLlamada.UbicacionArg u) {
+        switch (u.donde()) {
+            case REG_ENTERO -> memoria.cargarEntero(arg, "a" + u.indiceReg());
+            case REG_DOBLE -> memoria.cargarDouble(arg, "fa" + u.indiceReg());
+            case PILA -> {
+                if (tipo == TipoRV.DOBLE) {
+                    memoria.cargarDouble(arg, "ft0");
+                    AccesoMemoria.emitir(ctx, "fsd", "ft0", "sp", u.offsetPila());
+                } else {
+                    memoria.cargarEntero(arg, "t0");
+                    AccesoMemoria.emitir(ctx, "sw", "t0", "sp", u.offsetPila());
                 }
             }
         }
     }
 
-    private void resultado(Llamada3D lam) {
-        if (lam.getResult() != null) {
-            TipoRV t = ctx.getTipoRV(lam.getResult());
-            if (t == TipoRV.DOBLE) {
-                ctx.emitir("    fcvt.d.w ft0, a0");
-            } else {
-                ctx.emitir("    mv t0, a0");
-            }
-            guardar(lam.getResult(), t);
-        }
-    }
-
-    private void cargarComo(MemoryAccess op, String reg, TipoRV t) {
-        if (op == null) {
-            boolean esFlotante = reg != null && reg.startsWith("f");
-            if (esFlotante || t == TipoRV.DOBLE) {
-                ctx.emitir("    fcvt.d.w " + reg + ", zero");
-            } else {
-                ctx.emitir("    li " + reg + ", 0");
-            }
-            return;
-        }
-        if (t == TipoRV.DOBLE) {
-            ctx.emitir("    fld " + reg + ", " + ctx.getOffset(op) + "(s0)");
+    private void guardarRetorno(MemoryAccess destino) {
+        if (destino == null) return;
+        if (ctx.getTipoRV(destino) == TipoRV.DOBLE) {
+            memoria.guardarDouble(destino, "fa0");
         } else {
-            ctx.emitir("    lw " + reg + ", " + ctx.getOffset(op) + "(s0)");
+            memoria.guardarEntero(destino, "a0");
         }
-    }
-
-    private void guardar(MemoryAccess dest, TipoRV t) {
-        String srcReg = (t == TipoRV.DOBLE) ? "ft0" : "t0";
-        if (dest instanceof cunoc.compi2.alien_code.c3d.access.NameAccess na) {
-            if (na.isAutoreferencia() || "self".equals(na.getNombre())) {
-                int off = -8; // self en -8(s0)
-                if (t == TipoRV.DOBLE) ctx.emitir("    fsd " + srcReg + ", " + off + "(s0)");
-                else ctx.emitir("    sw " + srcReg + ", " + off + "(s0)");
-                return;
-            }
-            if (na.isGlobal()) {
-                int off = ctx.getOffsetGlobal(na.getNombre());
-                if (t == TipoRV.DOBLE) ctx.emitir("    fsd " + srcReg + ", " + off + "(s0)");
-                else ctx.emitir("    sw " + srcReg + ", " + off + "(s0)");
-                return;
-            }
-        }
-        int off = ctx.getOffset(dest);
-        if (t == TipoRV.DOBLE) ctx.emitir("    fsd " + srcReg + ", " + off + "(s0)");
-        else ctx.emitir("    sw " + srcReg + ", " + off + "(s0)");
-    }
-
-    private void guardarInmediato(MemoryAccess dest, long val) {
-        if (dest == null) return;
-        TipoRV t = ctx.getTipoRV(dest);
-        if (t == TipoRV.DOBLE) {
-            ctx.emitir("    li t0, " + val);
-            ctx.emitir("    fcvt.d.w ft0, t0");
-            guardar(dest, t);
-        } else {
-            ctx.emitir("    li t0, " + val);
-            guardar(dest, t);
-        }
-    }
-
-    private int offset(MemoryAccess op) {
-        return ctx.getOffset(op);
     }
 }

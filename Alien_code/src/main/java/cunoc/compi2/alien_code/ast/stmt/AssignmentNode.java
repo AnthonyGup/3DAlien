@@ -108,17 +108,34 @@ public class AssignmentNode extends Sentencia {
 
     private Symbol resolverArregloDestino(ContextoSemantico ctx) {
         if (destino.sufijos.isEmpty()) {
-            Symbol simbolo = ctx.resolver(destino.nombre);
+            Symbol simbolo = destino.nombre.equals("this")
+                    ? null : ctx.resolver(destino.nombre);
             return simbolo != null && simbolo.isArray() ? simbolo : null;
         }
         if (destino.sufijos.size() == 1
                 && destino.sufijos.get(0).tipo == AccessNode.Sufijo.Tipo.CAMPO) {
-            Symbol base = ctx.resolver(destino.nombre);
-            Symbol tipoBase = base != null && base.getTipoNombre() != null
-                    ? ctx.resolver(base.getTipoNombre()) : null;
+            String campo = destino.sufijos.get(0).nombreCampo;
+            Symbol base;
+            if (destino.nombre.equals("this")) {
+                base = ctx.claseActual();
+                if (base != null) {
+                    Symbol miembro = cunoc.compi2.alien_code.semantic.POO
+                            .buscarAtributoIncluyendoPrivado(base, campo);
+                    return miembro != null && miembro.isArray() ? miembro : null;
+                }
+                return null;
+            }
+            base = ctx.resolver(destino.nombre);
+            if (base == null) return null;
+            Symbol tipoBase;
+            if (base.getKind() == Symbol.Kind.CLASE || base.getKind() == Symbol.Kind.ESTRUCTURA) {
+                tipoBase = base;
+            } else {
+                tipoBase = base.getTipoNombre() != null
+                        ? ctx.resolver(base.getTipoNombre()) : null;
+            }
             if (tipoBase != null && tipoBase.getMiembros() != null) {
-                Symbol miembro = tipoBase.getMiembros()
-                        .resolve(destino.sufijos.get(0).nombreCampo);
+                Symbol miembro = tipoBase.getMiembros().resolve(campo);
                 if (miembro != null && miembro.isArray()) {
                     return miembro;
                 }

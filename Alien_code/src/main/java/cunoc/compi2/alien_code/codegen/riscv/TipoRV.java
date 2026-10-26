@@ -59,11 +59,20 @@ public enum TipoRV {
 
     public static TipoRV desdeString(String ctype) {
         if (ctype == null) return ENTERO;
-        String c = ctype.toLowerCase();
+        String c = ctype.toLowerCase().trim();
+        if (c.contains("[]") || c.endsWith("*") || c.contains("struct")) return REF;
+        if (c.contains("double") || c.contains("float")) return DOBLE;
         if (c.contains("bool")) return BOOL;
         if (c.contains("char")) return CHAR;
-        if (c.contains("double") || c.contains("float")) return DOBLE;
-        if (c.contains("struct") || c.endsWith("*")) return REF;
-        return ENTERO;
+        if (c.contains("int") || c.contains("void")) return ENTERO;
+        return REF;
+    }
+
+    public String cargaSlot() {
+        return (this == DOBLE) ? "fld" : "lw";
+    }
+
+    public String guardaSlot() {
+        return (this == DOBLE) ? "fsd" : "sw";
     }
 }

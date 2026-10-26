@@ -49,9 +49,16 @@ public final class RarsRunner {
 
     public static Resultado ejecutar(String asm, String entrada, int maxPasos) {
         Options opciones = new Options();
-        opciones.startAtMain = true;       // el programa empieza en la etiqueta main
+        // OJO: con assembleString la API NO respeta startAtMain: la ejecucion empieza en la
+        // PRIMERA instruccion de .text. El generador debe emitir el preambulo 'main:' primero
+        // y dejar el runtime y cualquier otra rutina despues.
+        opciones.startAtMain = true;
         opciones.maxSteps = maxPasos;
         Program programa = new Program(opciones);
+
+        // Defensa: RARS falla con CRLF y con BOM (ocurre al escribir el .s en Windows).
+        if (asm.startsWith("\uFEFF")) asm = asm.substring(1);
+        asm = asm.replace("\r\n", "\n");
 
         try {
             programa.assembleString(asm);

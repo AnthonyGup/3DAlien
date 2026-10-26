@@ -49,7 +49,19 @@ public class NewArrayNode extends Expresion {
     public MemoryAccess traducir(CodigoContexto ctx) {
         List<MemoryAccess> dims = new ArrayList<>();
         for (Node dim : dimensiones) {
-            dims.add(((Expresion) dim).traducir(ctx));
+            MemoryAccess d = ((Expresion) dim).traducir(ctx);
+            // Las dimensiones van incrustadas como texto en el literal malloc(...):
+            // materializarlas en un temporal para que el texto sea siempre
+            // Stack[(int)(P + N)] (valido en C y en el parser de malloc de RISC-V)
+            // y no algo como Heap[(int)(self) + 3] (p.ej. new int[this.filas][...]).
+            if (!(d instanceof cunoc.compi2.alien_code.c3d.access.TemporalAccess)
+                    && !(d instanceof cunoc.compi2.alien_code.c3d.access.NameAccess)
+                    && !esLiteralNumerico(d)) {
+                MemoryAccess tmp = Operandos.temporal(ctx, "int");
+                ctx.agregar(new Asignacion3D(tmp, d));
+                d = tmp;
+            }
+            dims.add(d);
         }
         String elemWord = elemWord();
         String elemC = TiposC.elementTypeNew(elemWord);
@@ -89,6 +101,13 @@ public class NewArrayNode extends Expresion {
                     "malloc(" + producto + " * " + TiposC.mallocSize(elemWord) + ")", Type.ARRAY)));
         }
         return t;
+    }
+
+    private boolean esLiteralNumerico(MemoryAccess d) {
+        if (!(d instanceof Literal3D lit)) {
+            return false;
+        }
+        return lit.getTexto() != null && lit.getTexto().trim().matches("^-?\\d+$");
     }
 
     private String elemWord() {

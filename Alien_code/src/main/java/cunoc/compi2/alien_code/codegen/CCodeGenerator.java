@@ -37,11 +37,6 @@ import java.util.Set;
 
 /**
  * Generador de codigo C de tres direcciones puro.
- *
- * Produce un unico archivo con un unico main(), sin structs ni funciones de
- * usuario. Toda la memoria vive en Stack[]/Heap[]/Str[] y el flujo se controla
- * solo con goto/etiquetas. Se permite usar la biblioteca estandar (printf,
- * scanf, strcpy, strlen, sprintf) como capa de entrada/salida.
  */
 public class CCodeGenerator {
     private static final int STACK_SIZE = 1 << 20;
@@ -398,6 +393,13 @@ public class CCodeGenerator {
             }
             if (texto.startsWith("malloc(")) {
                 String interno = extraerInternoMalloc(texto);
+                if (destino != null && destino.getTipo() == Type.STRING) {
+                    // Reserva para leer un string: va al pool de Str (S), no al Heap.
+                    // Si no, el scanf escribiria sobre la zona de literales.
+                    code.append("    ").append(dest).append(" = S;\n");
+                    code.append("    S = S + (").append(interno).append(");\n");
+                    return;
+                }
                 String cuenta = interno;
                 int prod = interno.indexOf(" * ");
                 if (prod > 0) {
@@ -499,6 +501,11 @@ public class CCodeGenerator {
         }
         if (op.getOperand2() == null) {
             code.append("    ").append(res).append(" = ").append(operador).append(" ").append(op1).append(";\n");
+            return;
+        }
+        if ("%".equals(operador)) {
+            code.append("    ").append(res).append(" = (double)(((int)(").append(op1)
+                .append(")) % ((int)(").append(op2).append(")));\n");
             return;
         }
         code.append("    ").append(res).append(" = ").append(op1).append(" ").append(operador).append(" ")

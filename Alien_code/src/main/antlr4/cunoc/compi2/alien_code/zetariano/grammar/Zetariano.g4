@@ -1,22 +1,5 @@
 grammar Zetariano;
 
-// ══════════════════════════════════════════════════════════════
-//  NOTA DE DISEÑO
-// ══════════════════════════════════════════════════════════════
-// - Zetariano se basa en Java: usa { } para bloques, ; para cerrar
-//   sentencias, y palabras reservadas en inglés.
-// - Un archivo .z define UNA sola clase, y el archivo debe llamarse
-//   igual que la clase (validación de nombre de archivo == nombre de
-//   clase: se hace en el análisis semántico / carga de archivos,
-//   no en esta gramática).
-// - No hay encapsulamiento, herencia ni polimorfismo en este proyecto
-//   (según el spec, se retoma en el Proyecto 2). Todo atributo,
-//   constructor y método es efectivamente público.
-// - Los arreglos usan sintaxis de Java: los corchetes van pegados al
-//   TIPO (`int[] numeros`), no al nombre de la variable como en
-//   Y? (`entero numeros[10]`) o Pig Latin (`series numeros[10] : numerus`).
-// ══════════════════════════════════════════════════════════════
-
 // ── Programa: una sola clase pública por archivo ─────────────
 
 programa
@@ -101,6 +84,7 @@ sentencia
     | doWhileClasico
     | retorno
     | superLlamada
+    | superMetodo
     | BREAK PUNTO_COMA
     | CONTINUE PUNTO_COMA
     | bloque                          // bloque anidado suelto
@@ -132,6 +116,10 @@ retorno
 
 superLlamada
     : SUPER PAREN_IZQ argumentos? PAREN_DER PUNTO_COMA
+    ;
+
+superMetodo
+    : SUPER PUNTO IDENTIFICADOR PAREN_IZQ argumentos? PAREN_DER PUNTO_COMA
     ;
 
 // ── Condicional (if / else if / else), llaves opcionales ─────
@@ -247,6 +235,8 @@ factor
     | NULL
     | NEW IDENTIFICADOR (PAREN_IZQ argumentos? PAREN_DER | (CORCHETE_IZQ expresion CORCHETE_DER)+)  // new Persona(...) u objeto[]
     | NEW tipoBase (CORCHETE_IZQ expresion CORCHETE_DER)+                                           // new int[5], new int[3][3]
+    | accesoVariable INCREMENTO                                                                     // postfijo: k++
+    | accesoVariable DECREMENTO                                                                     // postfijo: k--
     | accesoVariable
     | literalArreglo
     | PAREN_IZQ expresion PAREN_DER

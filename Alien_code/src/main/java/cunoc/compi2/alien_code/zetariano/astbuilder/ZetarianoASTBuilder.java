@@ -46,11 +46,30 @@ import cunoc.compi2.alien_code.zetariano.grammar.ZetarianoParser;
 
 public class ZetarianoASTBuilder extends ZetarianoBaseVisitor<Node> {
 
+    private final cunoc.compi2.alien_code.errors.ErrorListener erroresSintaxis =
+            new cunoc.compi2.alien_code.errors.ErrorListener();
+
+    public cunoc.compi2.alien_code.errors.ErrorListener getErroresSintaxis() {
+        return erroresSintaxis;
+    }
+
     public ProgramNode construir(String codigo) {
         ZetarianoLexer lexer = new ZetarianoLexer(CharStreams.fromString(codigo));
+        lexer.removeErrorListeners();
+        lexer.addErrorListener(cunoc.compi2.alien_code.errors.AntlrSintaxis.hacia(erroresSintaxis));
         CommonTokenStream tokens = new CommonTokenStream(lexer);
         ZetarianoParser parser = new ZetarianoParser(tokens);
-        return (ProgramNode) visitPrograma(parser.programa());
+        parser.removeErrorListeners();
+        parser.addErrorListener(cunoc.compi2.alien_code.errors.AntlrSintaxis.hacia(erroresSintaxis));
+        try {
+            return (ProgramNode) visitPrograma(parser.programa());
+        } catch (RuntimeException e) {
+            if (!erroresSintaxis.hasErrors()) {
+                erroresSintaxis.addError(cunoc.compi2.alien_code.errors.ErrorType.SINTACTICO,
+                        String.valueOf(e), 0, 0);
+            }
+            return null;
+        }
     }
 
     @Override
@@ -470,6 +489,16 @@ public class ZetarianoASTBuilder extends ZetarianoBaseVisitor<Node> {
             return new LiteralNode(LiteralNode.Clase.NULO, "null", line(ctx), column(ctx));
         }
         if (ctx.accesoVariable() != null) {
+            if (ctx.INCREMENTO() != null) {
+                return new cunoc.compi2.alien_code.ast.expr.IncrementoExprNode(
+                        (AccessNode) visitAccesoVariable(ctx.accesoVariable()), true,
+                        line(ctx), column(ctx));
+            }
+            if (ctx.DECREMENTO() != null) {
+                return new cunoc.compi2.alien_code.ast.expr.IncrementoExprNode(
+                        (AccessNode) visitAccesoVariable(ctx.accesoVariable()), false,
+                        line(ctx), column(ctx));
+            }
             return visitAccesoVariable(ctx.accesoVariable());
         }
         if (ctx.literalArreglo() != null) {

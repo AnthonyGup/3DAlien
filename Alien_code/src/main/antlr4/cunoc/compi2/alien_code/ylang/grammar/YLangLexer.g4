@@ -108,6 +108,8 @@ OR          : '||';
 AND         : '&&';
 IGUAL       : '==';
 DISTINTO    : '!=';
+MENOR_IGUAL : '<=';
+MAYOR_IGUAL : '>=';
 INCREMENTO  : '++';
 DECREMENTO  : '--';
 FLECHA      : '->';

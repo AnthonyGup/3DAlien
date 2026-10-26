@@ -9,8 +9,8 @@ import cunoc.compi2.alien_code.c3d.cuartetas.FinFuncion3D;
 import cunoc.compi2.alien_code.c3d.cuartetas.Goto3D;
 import cunoc.compi2.alien_code.c3d.cuartetas.Halt3D;
 import cunoc.compi2.alien_code.c3d.cuartetas.Imprimir3D;
-import cunoc.compi2.alien_code.c3d.cuartetas.Leer3D;
 import cunoc.compi2.alien_code.c3d.cuartetas.InicioFuncion3D;
+import cunoc.compi2.alien_code.c3d.cuartetas.Leer3D;
 import cunoc.compi2.alien_code.c3d.cuartetas.Llamada3D;
 import cunoc.compi2.alien_code.c3d.cuartetas.LlamadaVirtual3D;
 import cunoc.compi2.alien_code.c3d.cuartetas.Operacion3D;
@@ -32,10 +32,10 @@ public final class RiscVEmisor {
     public RiscVEmisor(ContextoRiscV ctx) {
         this.ctx = ctx;
         this.memoria = new EmisorMemoria(ctx);
-        this.aritmetica = new EmisorAritmetica(ctx);
-        this.control = new EmisorControl(ctx);
-        this.llamadas = new EmisorLlamadas(ctx);
-        this.es = new EmisorES(ctx);
+        this.aritmetica = new EmisorAritmetica(ctx, memoria);
+        this.control = new EmisorControl(ctx, memoria);
+        this.llamadas = new EmisorLlamadas(ctx, memoria);
+        this.es = new EmisorES(ctx, memoria);
     }
 
     public void emitir(Cuarteta cuarteta) {
@@ -52,12 +52,11 @@ public final class RiscVEmisor {
             case Leer3D leer -> es.leer(leer);
             case Retornar3D ret -> control.retornar(ret);
             case Halt3D halt -> control.detener(halt);
-            case InicioFuncion3D inicio -> control.inicioFuncion(inicio);
-            case FinFuncion3D fin -> control.finFuncion(fin);
-            default -> {
-                ctx.error("cuarteta no soportada: " + cuarteta.getClass().getSimpleName());
-                ctx.emitir("    # FIXME cuarteta: " + cuarteta.getClass().getSimpleName());
+            case InicioFuncion3D inicio -> {
             }
+            case FinFuncion3D fin -> {
+            }
+            default -> ctx.error("cuarteta no soportada: " + cuarteta.getClass().getSimpleName());
         }
     }
 }

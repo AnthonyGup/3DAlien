@@ -2,234 +2,180 @@ package cunoc.compi2.alien_code.codegen.riscv.emisores;
 
 import cunoc.compi2.alien_code.c3d.access.MemoryAccess;
 import cunoc.compi2.alien_code.c3d.cuartetas.Operacion3D;
-import cunoc.compi2.alien_code.codegen.riscv.AccesoMemoria;
 import cunoc.compi2.alien_code.codegen.riscv.ContextoRiscV;
-import cunoc.compi2.alien_code.codegen.riscv.OperadorRiscV;
 import cunoc.compi2.alien_code.codegen.riscv.TipoRV;
 
 public final class EmisorAritmetica {
     private final ContextoRiscV ctx;
+    private final EmisorMemoria memoria;
 
-    public EmisorAritmetica(ContextoRiscV ctx) {
+    public EmisorAritmetica(ContextoRiscV ctx, EmisorMemoria memoria) {
         this.ctx = ctx;
+        this.memoria = memoria;
     }
 
     public void operacion(Operacion3D op) {
         String simbolo = op.operator();
-        if ("conc".equals(simbolo) || "strd".equals(simbolo) || "strn".equals(simbolo) || "strc".equals(simbolo)) {
-            concatenacion(simbolo, op);
-            return;
-        }
-        OperadorRiscV operador = OperadorRiscV.desde(simbolo);
-        if (operador == null) {
-            ctx.error("operador no soportado: " + simbolo);
-            return;
-        }
-        if (op.getOperand1() == null) {
-            ctx.error("operacion sin operando izquierdo: " + simbolo);
+        if ("conc".equals(simbolo) || "strd".equals(simbolo)
+                || "strn".equals(simbolo) || "strc".equals(simbolo)) {
+            nativa(simbolo, op);
             return;
         }
         if (op.getOperand2() == null) {
-            unaria(operador, op);
+            unaria(simbolo, op);
             return;
         }
-        binaria(operador, op);
+        binaria(simbolo, op);
     }
 
-    private void unaria(OperadorRiscV operador, Operacion3D op) {
+    private void unaria(String simbolo, Operacion3D op) {
         MemoryAccess src = op.getOperand1();
-        TipoRV t = ctx.getTipoRV(src);
-        if (t == TipoRV.DOBLE) {
-            ctx.emitir("    fld ft0, " + offsetReg(src) + "(s0)");
-        } else {
-            ctx.emitir("    lw t0, " + offsetReg(src) + "(s0)");
-        }
-        switch (operador) {
-            case NEGACION -> {
-                if (t == TipoRV.DOBLE) ctx.emitir("    fneg.d ft0, ft0");
-                else ctx.emitir("    neg t0, t0");
-            }
-            case NO -> {
-                if (t.esEntero()) {
-                    ctx.emitir("    seqz t0, t0");
-                } else {
-                    ctx.emitir("    fcvt.d.w ft0, zero");
-                    ctx.emitir("    feq.d t1, ft0, ft0");
-                    ctx.emitir("    seqz t0, t1");
-                }
-            }
-            default -> ctx.error("operador unario no soportado: " + operador.simbolo());
-        }
-        if (op.getResult() != null) {
-            TipoRV tDest = ctx.getTipoRV(op.getResult());
-            String srcReg = (t == TipoRV.DOBLE) ? "ft0" : "t0";
-            if (t != tDest) convertir(srcReg, t, tDest);
-            guardarResultado(op.getResult(), tDest, srcReg);
-        }
-    }
-
-    private void binaria(OperadorRiscV operador, Operacion3D op) {
-        MemoryAccess op1 = op.getOperand1();
-        MemoryAccess op2 = op.getOperand2();
-        TipoRV t1 = ctx.getTipoRV(op1);
-        TipoRV t2 = ctx.getTipoRV(op2);
-        TipoRV tRes = ctx.getTipoRV(op.getResult());
-
-        // Promover a double si el resultado es double
-        boolean usarDouble = tRes == TipoRV.DOBLE || t1 == TipoRV.DOBLE || t2 == TipoRV.DOBLE;
-
-        if (usarDouble) {
-            // Cargar ambos como double
-            cargarComo(op1, "fs0", t1, TipoRV.DOBLE);
-            cargarComo(op2, "ft0", t2, TipoRV.DOBLE);
-            switch (operador) {
-                case SUMA -> ctx.emitir("    fadd.d ft0, fs0, ft0");
-                case RESTA -> ctx.emitir("    fsub.d ft0, fs0, ft0");
-                case MULTIPLICACION -> ctx.emitir("    fmul.d ft0, fs0, ft0");
-                case DIVISION -> ctx.emitir("    fdiv.d ft0, fs0, ft0");
-                case RESIDUO -> {
-                    ctx.emitir("    fcvt.w.d t0, fs0, rtz");
-                    ctx.emitir("    fcvt.w.d t1, ft0, rtz");
-                    ctx.emitir("    rem t0, t0, t1");
-                    ctx.emitir("    fcvt.d.w ft0, t0");
-                }
-                case MENOR -> ctx.emitir("    flt.d t0, fs0, ft0");
-                case MAYOR -> ctx.emitir("    flt.d t0, ft0, fs0");
-                case MENOR_IGUAL -> ctx.emitir("    fle.d t0, fs0, ft0");
-                case MAYOR_IGUAL -> ctx.emitir("    fle.d t0, ft0, fs0");
-                case IGUAL -> ctx.emitir("    feq.d t0, fs0, ft0");
-                case DISTINTO -> {
-                    ctx.emitir("    feq.d t0, fs0, ft0");
-                    ctx.emitir("    xori t0, t0, 1");
-                }
-                case AND, OR -> {
-                    ctx.emitir("    fcvt.w.d t0, fs0, rtz");
-                    ctx.emitir("    fcvt.w.d t1, ft0, rtz");
-                    ctx.emitir("    " + (operador == OperadorRiscV.AND ? "and" : "or") + " t0, t0, t1");
-                    ctx.emitir("    snez t0, t0");
-                    ctx.emitir("    fcvt.d.w ft0, t0");
-                }
-            }
-            // Comparaciones dejan resultado en t0 (entero 0/1), convertir si resultado es double
-            if (operador == OperadorRiscV.MENOR || operador == OperadorRiscV.MAYOR
-                    || operador == OperadorRiscV.MENOR_IGUAL || operador == OperadorRiscV.MAYOR_IGUAL
-                    || operador == OperadorRiscV.IGUAL || operador == OperadorRiscV.DISTINTO) {
-                if (tRes == TipoRV.DOBLE) {
-                    ctx.emitir("    fcvt.d.w ft0, t0");
-                }
-            }
-        } else {
-            // Enteros
-            ctx.emitir("    lw t0, " + offsetReg(op1) + "(s0)");
-            ctx.emitir("    lw t1, " + offsetReg(op2) + "(s0)");
-            switch (operador) {
-                case SUMA -> ctx.emitir("    add t2, t0, t1");
-                case RESTA -> ctx.emitir("    sub t2, t0, t1");
-                case MULTIPLICACION -> ctx.emitir("    mul t2, t0, t1");
-                case DIVISION -> ctx.emitir("    div t2, t0, t1");
-                case RESIDUO -> ctx.emitir("    rem t2, t0, t1");
-                case MENOR -> ctx.emitir("    slt t2, t0, t1");
-                case MAYOR -> ctx.emitir("    slt t2, t1, t0");
-                case MENOR_IGUAL -> { ctx.emitir("    slt t2, t1, t0"); ctx.emitir("    xori t2, t2, 1"); }
-                case MAYOR_IGUAL -> { ctx.emitir("    slt t2, t0, t1"); ctx.emitir("    xori t2, t2, 1"); }
-                case IGUAL -> { ctx.emitir("    sub t2, t0, t1"); ctx.emitir("    seqz t2, t2"); }
-                case DISTINTO -> { ctx.emitir("    sub t2, t0, t1"); ctx.emitir("    snez t2, t2"); }
-                case AND -> ctx.emitir("    and t2, t0, t1");
-                case OR -> ctx.emitir("    or t2, t0, t1");
-                default -> { ctx.error("operador binario no soportado: " + operador.simbolo()); return; }
-            }
-            // Guardar resultado
-            if (tRes == TipoRV.DOBLE) {
-                ctx.emitir("    fcvt.d.w ft0, t2");
+        if (src == null) return;
+        if ("-".equals(simbolo)) {
+            if (ctx.getTipoRV(src) == TipoRV.DOBLE) {
+                memoria.cargarDouble(src, "ft0");
+                ctx.emitir("    fneg.d ft0, ft0");
+                guardar(op.getResult(), true, null, "ft0");
             } else {
-                ctx.emitir("    mv t0, t2");
+                memoria.cargarEntero(src, "t0");
+                ctx.emitir("    neg t0, t0");
+                guardar(op.getResult(), false, "t0", null);
             }
+            return;
         }
-        if (op.getResult() != null) {
-            String srcReg = (tRes == TipoRV.DOBLE) ? "ft0" : "t0";
-            guardarResultado(op.getResult(), tRes, srcReg);
+        if ("!".equals(simbolo)) {
+            if (ctx.getTipoRV(src) == TipoRV.DOBLE) {
+                memoria.cargarDouble(src, "ft0");
+                ctx.emitir("    fcvt.d.w ft1, zero");
+                ctx.emitir("    feq.d t0, ft0, ft1");
+            } else {
+                memoria.cargarEntero(src, "t0");
+                ctx.emitir("    seqz t0, t0");
+            }
+            guardar(op.getResult(), false, "t0", null);
+            return;
+        }
+        ctx.error("operador unario no soportado: " + simbolo);
+    }
+
+    private void binaria(String simbolo, Operacion3D op) {
+        MemoryAccess a = op.getOperand1();
+        MemoryAccess b = op.getOperand2();
+        boolean doble = ctx.getTipoRV(a) == TipoRV.DOBLE || ctx.getTipoRV(b) == TipoRV.DOBLE;
+        if (doble) {
+            memoria.cargarDouble(a, "ft0");
+            memoria.cargarDouble(b, "ft1");
+            switch (simbolo) {
+                case "+" -> { ctx.emitir("    fadd.d ft0, ft0, ft1"); guardar(op.getResult(), true, null, "ft0"); }
+                case "-" -> { ctx.emitir("    fsub.d ft0, ft0, ft1"); guardar(op.getResult(), true, null, "ft0"); }
+                case "*" -> { ctx.emitir("    fmul.d ft0, ft0, ft1"); guardar(op.getResult(), true, null, "ft0"); }
+                case "/" -> { ctx.emitir("    fdiv.d ft0, ft0, ft1"); guardar(op.getResult(), true, null, "ft0"); }
+                case "%" -> {
+                    ctx.emitir("    fcvt.w.d t0, ft0, rtz");
+                    ctx.emitir("    fcvt.w.d t1, ft1, rtz");
+                    ctx.emitir("    rem t0, t0, t1");
+                    guardar(op.getResult(), false, "t0", null);
+                }
+                case "<" -> { ctx.emitir("    flt.d t0, ft0, ft1"); guardar(op.getResult(), false, "t0", null); }
+                case ">" -> { ctx.emitir("    flt.d t0, ft1, ft0"); guardar(op.getResult(), false, "t0", null); }
+                case "<=" -> { ctx.emitir("    fle.d t0, ft0, ft1"); guardar(op.getResult(), false, "t0", null); }
+                case ">=" -> { ctx.emitir("    fle.d t0, ft1, ft0"); guardar(op.getResult(), false, "t0", null); }
+                case "==" -> { ctx.emitir("    feq.d t0, ft0, ft1"); guardar(op.getResult(), false, "t0", null); }
+                case "!=" -> {
+                    ctx.emitir("    feq.d t0, ft0, ft1");
+                    ctx.emitir("    xori t0, t0, 1");
+                    guardar(op.getResult(), false, "t0", null);
+                }
+                case "&&", "||" -> {
+                    ctx.emitir("    fcvt.d.w ft2, zero");
+                    ctx.emitir("    feq.d t0, ft0, ft2");
+                    ctx.emitir("    xori t0, t0, 1");
+                    ctx.emitir("    feq.d t1, ft1, ft2");
+                    ctx.emitir("    xori t1, t1, 1");
+                    ctx.emitir("    " + ("&&".equals(simbolo) ? "and t0, t0, t1" : "or t0, t0, t1"));
+                    guardar(op.getResult(), false, "t0", null);
+                }
+                default -> ctx.error("operador no soportado: " + simbolo);
+            }
+            return;
+        }
+        memoria.cargarEntero(a, "t0", 0);
+        memoria.cargarEntero(b, "t1", 2);
+        switch (simbolo) {
+            case "+" -> { ctx.emitir("    add t2, t0, t1"); guardar(op.getResult(), false, "t2", null); }
+            case "-" -> { ctx.emitir("    sub t2, t0, t1"); guardar(op.getResult(), false, "t2", null); }
+            case "*" -> { ctx.emitir("    mul t2, t0, t1"); guardar(op.getResult(), false, "t2", null); }
+            case "/" -> { ctx.emitir("    div t2, t0, t1"); guardar(op.getResult(), false, "t2", null); }
+            case "%" -> { ctx.emitir("    rem t2, t0, t1"); guardar(op.getResult(), false, "t2", null); }
+            case "<" -> { ctx.emitir("    slt t2, t0, t1"); guardar(op.getResult(), false, "t2", null); }
+            case ">" -> { ctx.emitir("    slt t2, t1, t0"); guardar(op.getResult(), false, "t2", null); }
+            case "<=" -> {
+                ctx.emitir("    slt t2, t1, t0");
+                ctx.emitir("    xori t2, t2, 1");
+                guardar(op.getResult(), false, "t2", null);
+            }
+            case ">=" -> {
+                ctx.emitir("    slt t2, t0, t1");
+                ctx.emitir("    xori t2, t2, 1");
+                guardar(op.getResult(), false, "t2", null);
+            }
+            case "==" -> {
+                ctx.emitir("    sub t2, t0, t1");
+                ctx.emitir("    seqz t2, t2");
+                guardar(op.getResult(), false, "t2", null);
+            }
+            case "!=" -> {
+                ctx.emitir("    sub t2, t0, t1");
+                ctx.emitir("    snez t2, t2");
+                guardar(op.getResult(), false, "t2", null);
+            }
+            case "&&" -> { ctx.emitir("    and t2, t0, t1"); guardar(op.getResult(), false, "t2", null); }
+            case "||" -> { ctx.emitir("    or t2, t0, t1"); guardar(op.getResult(), false, "t2", null); }
+            default -> ctx.error("operador no soportado: " + simbolo);
         }
     }
 
-    private void concatenacion(String simbolo, Operacion3D op) {
-        // conc: a0=dir1, a1=dir2 -> rt_conc -> a0=dirResultado
-        // strd: a0=int -> rt_strd -> a0=dir
-        // strn: fa0=double -> rt_strn -> a0=dir
-        // strc: a0=char -> rt_strc -> a0=dir
+    private void nativa(String simbolo, Operacion3D op) {
         switch (simbolo) {
             case "conc" -> {
-                cargarComo(op.getOperand1(), "a0", ctx.getTipoRV(op.getOperand1()), TipoRV.REF);
-                cargarComo(op.getOperand2(), "a1", ctx.getTipoRV(op.getOperand2()), TipoRV.REF);
+                memoria.cargarEntero(op.getOperand1(), "a0");
+                memoria.cargarEntero(op.getOperand2(), "a1");
                 ctx.emitir("    jal ra, rt_conc");
             }
             case "strd" -> {
-                cargarComo(op.getOperand1(), "a0", ctx.getTipoRV(op.getOperand1()), TipoRV.ENTERO);
+                memoria.cargarEntero(op.getOperand1(), "a0");
                 ctx.emitir("    jal ra, rt_strd");
             }
             case "strn" -> {
-                cargarComo(op.getOperand1(), "fa0", ctx.getTipoRV(op.getOperand1()), TipoRV.DOBLE);
+                memoria.cargarDouble(op.getOperand1(), "fa0");
                 ctx.emitir("    jal ra, rt_strn");
             }
             case "strc" -> {
-                cargarComo(op.getOperand1(), "a0", ctx.getTipoRV(op.getOperand1()), TipoRV.CHAR);
+                memoria.cargarEntero(op.getOperand1(), "a0");
                 ctx.emitir("    jal ra, rt_strc");
             }
+            default -> ctx.error("nativa no soportada: " + simbolo);
         }
-        if (op.getResult() != null) {
-            TipoRV tRes = ctx.getTipoRV(op.getResult());
-            String srcReg = (tRes == TipoRV.DOBLE) ? "ft0" : "a0";
-            if (tRes != TipoRV.REF) {
-                // rt_* devuelven dirección en a0, convertir si necesario
-                if (tRes == TipoRV.DOBLE) ctx.emitir("    fcvt.d.w ft0, a0");
-                else ctx.emitir("    mv t0, a0");
-            }
-            guardarResultado(op.getResult(), tRes, srcReg);
-        }
+        guardar(op.getResult(), false, "a0", null);
     }
 
-    private void cargarComo(MemoryAccess op, String reg, TipoRV tSrc, TipoRV tDst) {
-        if (tSrc == tDst) {
-            ctx.emitir("    " + tDst.carga + " " + reg + ", " + offsetReg(op) + "(s0)");
-        } else {
-            // Cargar en registro temporal y convertir
-            String tmp = (tSrc == TipoRV.DOBLE) ? "ft0" : "t0";
-            ctx.emitir("    " + tSrc.carga + " " + tmp + ", " + offsetReg(op) + "(s0)");
-            if (tSrc.esEntero() && tDst == TipoRV.DOBLE) {
-                ctx.emitir("    fcvt.d.w " + reg + ", " + tmp);
-            } else if (tSrc == TipoRV.DOBLE && tDst.esEntero()) {
-                ctx.emitir("    fcvt.w.d " + reg + ", " + tmp + ", rtz");
+    private void guardar(MemoryAccess res, boolean enDouble, String regI, String regF) {
+        if (res == null) return;
+        TipoRV tr = ctx.getTipoRV(res);
+        if (enDouble) {
+            if (tr == TipoRV.DOBLE) {
+                memoria.guardarDouble(res, regF);
             } else {
-                ctx.emitir("    mv " + reg + ", " + tmp);
+                ctx.emitir("    fcvt.w.d t0, " + regF + ", rtz");
+                memoria.guardarEntero(res, "t0");
             }
-        }
-    }
-
-    private void guardarResultado(MemoryAccess dest, TipoRV t, String srcReg) {
-        if (dest instanceof cunoc.compi2.alien_code.c3d.access.NameAccess na) {
-            if (na.isAutoreferencia() || "self".equals(na.getNombre())) {
-                AccesoMemoria.emitir(ctx, t.guarda, srcReg, "s0", -8);
-                return;
+        } else {
+            if (tr == TipoRV.DOBLE) {
+                ctx.emitir("    fcvt.d.w ft0, " + regI);
+                memoria.guardarDouble(res, "ft0");
+            } else {
+                memoria.guardarEntero(res, regI);
             }
-            if (na.isGlobal()) {
-                int off = ctx.getOffsetGlobal(na.getNombre());
-                AccesoMemoria.emitir(ctx, t.guarda, srcReg, "s0", off);
-                return;
-            }
-        }
-        int off = ctx.getOffset(dest);
-        AccesoMemoria.emitir(ctx, t.guarda, srcReg, "s0", off);
-    }
-
-    private int offsetReg(MemoryAccess op) {
-        return ctx.getOffset(op);
-    }
-
-    private void convertir(String reg, TipoRV de, TipoRV a) {
-        if (de == a) return;
-        if (de.esEntero() && a == TipoRV.DOBLE) {
-            ctx.emitir("    fcvt.d.w " + reg + ", " + reg);
-        } else if (de == TipoRV.DOBLE && a.esEntero()) {
-            ctx.emitir("    fcvt.w.d " + reg + ", " + reg + ", rtz");
         }
     }
 }

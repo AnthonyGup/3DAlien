@@ -255,6 +255,20 @@ public class AccessNode extends Expresion {
                     }
                 }
             }
+            if (actual == null && ctx.claseActual() != null && esLlamadaDirecta()) {
+                Symbol clase = ctx.claseActual();
+                Symbol metodo = POO.buscarMetodoIncluyendoPrivado(clase, nombre);
+                if (metodo != null) {
+                    if (POO.puedeAcceder(metodo, clase)) {
+                        actual = metodo;
+                    } else {
+                        String duena = metodo.getClaseDuena() != null ? metodo.getClaseDuena() : "?";
+                        ctx.registrarError(getLine(), getColumn(),
+                            "'" + nombre + "' es privado en '" + duena + "'");
+                        return null;
+                    }
+                }
+            }
             if (actual == null) {
                 ctx.registrarError(getLine(), getColumn(), "Variable no declarada: '" + nombre + "'");
                 return null;
@@ -338,11 +352,16 @@ public class AccessNode extends Expresion {
                                 String duena = privado.getClaseDuena() != null ? privado.getClaseDuena() : "?";
                                 ctx.registrarError(getLine(), getColumn(),
                                     "'" + metodoPendiente + "' es privado en '" + duena + "'");
-                            } else {
-                                ctx.registrarError(getLine(), getColumn(),
+                                return null;
+                            }
+                            if (privado != null) {
+                                metodo = privado;
+                            }
+                        }
+                        if (metodo == null) {
+                            ctx.registrarError(getLine(), getColumn(),
                                     "'" + contenedorPendiente.getName() + "' no tiene un método '"
                                     + metodoPendiente + "'");
-                            }
                             return null;
                         }
                         if (!metodo.tieneFirmaCompatible(tiposArgs)) {
@@ -420,6 +439,10 @@ public class AccessNode extends Expresion {
         }
 
         return actual.getType();
+    }
+
+    private boolean esLlamadaDirecta() {
+        return !sufijos.isEmpty() && sufijos.get(0).tipo == Sufijo.Tipo.LLAMADA;
     }
 
     private Symbol contenedorDe(ContextoSemantico ctx, Symbol actual) {

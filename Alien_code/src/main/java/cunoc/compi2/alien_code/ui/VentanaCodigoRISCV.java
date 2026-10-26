@@ -7,14 +7,10 @@ import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.Insets;
 import java.awt.Window;
-import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.util.ArrayList;
-import java.util.List;
 import javax.swing.JButton;
 import javax.swing.JDialog;
 import javax.swing.JFileChooser;
@@ -23,6 +19,9 @@ import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 import org.fife.ui.rtextarea.RTextScrollPane;
+
+import cunoc.compi2.alien_code.runner.RarsRunner;
+import cunoc.compi2.alien_code.runner.RuntimeRiscV;
 
 public class VentanaCodigoRISCV extends JDialog {
 
@@ -154,74 +153,42 @@ public class VentanaCodigoRISCV extends JDialog {
 
         File sFile = new File(baseDir, "programa.s");
         try {
-            Files.writeString(sFile.toPath(), area.getText(), StandardCharsets.UTF_8);
-            log.agregarInfo("> Código RISC-V guardado en: " + sFile.getAbsolutePath());
+            String ejecutable = area.getText() + "\n" + RuntimeRiscV.texto();
+            Files.writeString(sFile.toPath(), ejecutable, StandardCharsets.UTF_8);
+            log.agregarInfo("> Código RISC-V (programa + runtime) guardado en: "
+                    + sFile.getAbsolutePath());
         } catch (IOException ex) {
             log.agregarError("No se pudo escribir .s: " + ex.getMessage());
             return;
         }
 
-        String rarsJar = encontrarRarsJar();
-        if (rarsJar == null) {
-            log.agregarError("No se encontró rars.jar en libs/ ni en el classpath.");
+        log.agregarInfo("> Ejecutando en RARS (embebido): " + sFile.getAbsolutePath() + " ...");
+        String asm;
+        try {
+            asm = Files.readString(sFile.toPath(), StandardCharsets.UTF_8);
+        } catch (IOException ex) {
+            log.agregarError("No se pudo leer .s: " + ex.getMessage());
             return;
         }
 
-        log.agregarInfo("> Ejecutando en RARS: " + sFile.getAbsolutePath() + " ...");
         new Thread(() -> {
             try {
-                List<String> cmd = new ArrayList<>();
-                cmd.add("java");
-                cmd.add("-cp");
-                cmd.add(rarsJar + File.pathSeparator + ".");
-                cmd.add("rars.RARS");
-                cmd.add(sFile.getAbsolutePath());
-
-                ProcessBuilder pb = new ProcessBuilder(cmd);
-                pb.directory(baseDir);
-                pb.redirectErrorStream(true);
-                Process proc = pb.start();
-
-                StringBuilder salida = new StringBuilder();
-                try (BufferedReader br = new BufferedReader(new InputStreamReader(proc.getInputStream(), StandardCharsets.UTF_8))) {
-                    String linea;
-                    while ((linea = br.readLine()) != null) {
-                        salida.append(linea).append('\n');
-                    }
-                }
-                int exit = proc.waitFor();
-
-                String out = salida.toString().trim();
-                int finalExit = exit;
-                String finalOut = out;
+                RarsRunner.Resultado r = RarsRunner.ejecutar(asm, "");
                 SwingUtilities.invokeLater(() -> {
-                    if (finalExit == 0) {
-                        log.agregarExito("Ejecución RARS exitosa (exit=" + finalExit + ")");
-                        if (!finalOut.isEmpty()) log.agregarInfo(finalOut);
+                    if (r.estado == RarsRunner.Estado.OK) {
+                        log.agregarExito("Ejecución RARS exitosa (exit=" + r.codigoSalida + ")");
                     } else {
-                        log.agregarError("RARS terminó con exit=" + finalExit);
-                        if (!finalOut.isEmpty()) log.agregarError(finalOut);
+                        log.agregarError("RARS " + r.estado
+                                + (r.mensaje.isEmpty() ? "" : ": " + r.mensaje));
+                    }
+                    if (!r.salida.isEmpty()) {
+                        log.agregarInfo(r.salida);
                     }
                 });
-            } catch (IOException | InterruptedException ex) {
-                SwingUtilities.invokeLater(() -> log.agregarError("Excepción ejecutando RARS: " + ex.getMessage()));
+            } catch (Exception ex) {
+                SwingUtilities.invokeLater(() ->
+                        log.agregarError("Excepción ejecutando RARS: " + ex.getMessage()));
             }
         }).start();
-    }
-
-    private String encontrarRarsJar() {
-        if (carpetaProyecto != null) {
-            File f = new File(carpetaProyecto, "libs/rars.jar");
-            if (f.isFile()) return f.getAbsolutePath();
-        }
-        File f2 = new File("3DAlien/Alien_code/libs/rars.jar");
-        if (f2.isFile()) return f2.getAbsolutePath();
-        String cp = System.getProperty("java.class.path");
-        for (String entry : cp.split(File.pathSeparator)) {
-            if (entry.toLowerCase().contains("rars") && entry.endsWith(".jar")) {
-                return entry;
-            }
-        }
-        return null;
     }
 }

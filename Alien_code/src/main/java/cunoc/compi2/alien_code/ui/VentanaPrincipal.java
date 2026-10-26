@@ -213,10 +213,16 @@ public class VentanaPrincipal extends JFrame {
 
     private void ejecutarPipelineSemantico(File archivo, PanelLog log, VentanaReporte ventanaErrores) {
         ErrorListener errores = new ErrorListener();
+        ErrorListener erroresSintaxis = new ErrorListener();
         List<ProgramNode> programas = new ArrayList<>();
         List<Object[]> filasErrores = new ArrayList<>();
 
-        ProgramNode programa = construirAST(archivo);
+        ProgramNode programa = construirAST(archivo, erroresSintaxis);
+        if (programa == null && erroresSintaxis.hasErrors()) {
+            agregarErroresSintaxis(erroresSintaxis, filasErrores);
+            reportarErrores(log, ventanaErrores, filasErrores);
+            return;
+        }
         if (programa == null) {
             log.agregarError("No se pudo construir el AST de " + archivo.getName() + ".");
             return;
@@ -241,13 +247,24 @@ public class VentanaPrincipal extends JFrame {
                     importacion.getLine(), importacion.getColumn()});
                 continue;
             }
-            ProgramNode programaImportado = construirAST(archivoImportado);
+            ProgramNode programaImportado = construirAST(archivoImportado, erroresSintaxis);
+            if (programaImportado == null && erroresSintaxis.hasErrors()) {
+                agregarErroresSintaxis(erroresSintaxis, filasErrores);
+                reportarErrores(log, ventanaErrores, filasErrores);
+                return;
+            }
             if (programaImportado == null) {
                 log.agregarPendiente("El constructor de AST de " + extensionDe(archivoImportado).toUpperCase()
                         + " aún no está implementado (import '" + importacion.rutaCompleta + "').");
                 continue;
             }
             programas.add(programaImportado);
+        }
+
+        if (erroresSintaxis.hasErrors()) {
+            agregarErroresSintaxis(erroresSintaxis, filasErrores);
+            reportarErrores(log, ventanaErrores, filasErrores);
+            return;
         }
 
         SemanticAnalyzer analizador = new SemanticAnalyzer(errores);
@@ -261,18 +278,7 @@ public class VentanaPrincipal extends JFrame {
         }
 
         if (!filasErrores.isEmpty()) {
-            for (Object[] fila : filasErrores) {
-                String tipo = String.valueOf(fila[0]);
-                String mensaje = String.valueOf(fila[1]);
-                int linea = ((Number) fila[2]).intValue();
-                int columna = ((Number) fila[3]).intValue();
-                log.agregarError("[" + tipo + "] "
-                    + (linea > 0 ? "Línea " + linea + ", Columna " + columna + ": " : "")
-                    + mensaje);
-            }
-            ventanaErrores.setDatos(filasErrores);
-            log.agregarError("Se detectaron " + filasErrores.size()
-                + " error(es). Ver Reportes > Ver errores.");
+            reportarErrores(log, ventanaErrores, filasErrores);
             return;
         }
 
@@ -322,16 +328,56 @@ public class VentanaPrincipal extends JFrame {
         return sb.toString();
     }
 
-    private ProgramNode construirAST(File archivo) {
+    private void agregarErroresSintaxis(ErrorListener sintaxis, List<Object[]> filasErrores) {
+        for (cunoc.compi2.alien_code.errors.CompilerError error : sintaxis.getErrors()) {
+            filasErrores.add(new Object[]{"Sintáctico", error.getMessage(),
+                error.getLine(), error.getColumn()});
+        }
+    }
+
+    private void reportarErrores(PanelLog log, VentanaReporte ventanaErrores, List<Object[]> filasErrores) {
+        for (Object[] fila : filasErrores) {
+            String tipo = String.valueOf(fila[0]);
+            String mensaje = String.valueOf(fila[1]);
+            int linea = ((Number) fila[2]).intValue();
+            int columna = ((Number) fila[3]).intValue();
+            log.agregarError("[" + tipo + "] "
+                + (linea > 0 ? "Línea " + linea + ", Columna " + columna + ": " : "")
+                + mensaje);
+        }
+        ventanaErrores.setDatos(filasErrores);
+        log.agregarError("Se detectaron " + filasErrores.size()
+            + " error(es). Ver Reportes > Ver errores.");
+    }
+
+    private ProgramNode construirAST(File archivo, ErrorListener sintaxis) {
         String codigo = leer(archivo);
         if (codigo == null) return null;
         switch (extensionDe(archivo)) {
-            case "pig":
-                return new PigLatinASTBuilder().construir(codigo);
-            case "y":
-                return new YLangASTBuilder().construir(codigo);
-            case "z":
-                return new ZetarianoASTBuilder().construir(codigo);
+            case "pig": {
+                PigLatinASTBuilder builder = new PigLatinASTBuilder();
+                ProgramNode p = builder.construir(codigo);
+                if (builder.getErroresSintaxis().hasErrors()) {
+                    sintaxis.getErrors().addAll(builder.getErroresSintaxis().getErrors());
+                }
+                return p;
+            }
+            case "y": {
+                YLangASTBuilder builder = new YLangASTBuilder();
+                ProgramNode p = builder.construir(codigo);
+                if (builder.getErroresSintaxis().hasErrors()) {
+                    sintaxis.getErrors().addAll(builder.getErroresSintaxis().getErrors());
+                }
+                return p;
+            }
+            case "z": {
+                ZetarianoASTBuilder builder = new ZetarianoASTBuilder();
+                ProgramNode p = builder.construir(codigo);
+                if (builder.getErroresSintaxis().hasErrors()) {
+                    sintaxis.getErrors().addAll(builder.getErroresSintaxis().getErrors());
+                }
+                return p;
+            }
             default:
                 return null;
         }

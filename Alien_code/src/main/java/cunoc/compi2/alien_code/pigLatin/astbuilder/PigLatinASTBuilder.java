@@ -18,11 +18,30 @@ import cunoc.compi2.alien_code.pigLatin.grammar.PigLatinParser;
 
 public class PigLatinASTBuilder extends PigLatinBaseVisitor<Node> {
 
+    private final cunoc.compi2.alien_code.errors.ErrorListener erroresSintaxis =
+            new cunoc.compi2.alien_code.errors.ErrorListener();
+
+    public cunoc.compi2.alien_code.errors.ErrorListener getErroresSintaxis() {
+        return erroresSintaxis;
+    }
+
     public ProgramNode construir(String codigo) {
         PigLatinLexer lexer = new PigLatinLexer(CharStreams.fromString(codigo));
+        lexer.removeErrorListeners();
+        lexer.addErrorListener(cunoc.compi2.alien_code.errors.AntlrSintaxis.hacia(erroresSintaxis));
         CommonTokenStream tokens = new CommonTokenStream(lexer);
         PigLatinParser parser = new PigLatinParser(tokens);
-        return (ProgramNode) visitPrograma(parser.programa());
+        parser.removeErrorListeners();
+        parser.addErrorListener(cunoc.compi2.alien_code.errors.AntlrSintaxis.hacia(erroresSintaxis));
+        try {
+            return (ProgramNode) visitPrograma(parser.programa());
+        } catch (RuntimeException e) {
+            if (!erroresSintaxis.hasErrors()) {
+                erroresSintaxis.addError(cunoc.compi2.alien_code.errors.ErrorType.SINTACTICO,
+                        String.valueOf(e), 0, 0);
+            }
+            return null;
+        }
     }
 
     @Override

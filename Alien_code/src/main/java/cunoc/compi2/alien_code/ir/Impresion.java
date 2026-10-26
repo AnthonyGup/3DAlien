@@ -20,9 +20,9 @@ public final class Impresion {
         for (MemoryAccess arg : argumentos) {
             if (arg instanceof Literal3D literal && literal.getTipo() == Type.STRING) {
                 String texto = literal.getTexto();
-                if (texto.length() >= 2) {
-                    formato.append(texto, 1, texto.length() - 1);
-                }
+                String contenido = texto.length() >= 2
+                        ? texto.substring(1, texto.length() - 1) : "";
+                formato.append(contenido.replace("%", "%%"));
                 continue;
             }
             Type tipo = Operandos.tipoOperando(ctx, arg);

@@ -11,25 +11,22 @@ import java.util.List;
 
 public final class EmisorES {
     private final ContextoRiscV ctx;
-    private final RiscVFormato formato = new RiscVFormato();
+    private final EmisorMemoria memoria;
 
-    public EmisorES(ContextoRiscV ctx) {
+    public EmisorES(ContextoRiscV ctx, EmisorMemoria memoria) {
         this.ctx = ctx;
+        this.memoria = memoria;
     }
 
     public void imprimir(Imprimir3D imp) {
-        List<RiscVFormato.Trozo> trozos = formato.descomponer(imp);
+        List<RiscVFormato.Trozo> trozos = new RiscVFormato().descomponer(imp);
         List<MemoryAccess> operandos = imp.getOperandos();
         List<String> especificadores = imp.getEspecificadores();
         int indice = 0;
         for (RiscVFormato.Trozo trozo : trozos) {
             if (trozo.tipo() == RiscVFormato.TipoTrozo.TEXTO) {
                 if (!trozo.texto().isEmpty()) {
-                    String et = ctx.etiquetaFormato(trozo.texto());
-                    if (et == null) {
-                        et = "fmt_" + ctx.nuevaEtiquetaFormato();
-                        ctx.setEtiquetaFormato(trozo.texto(), et);
-                    }
+                    String et = ctx.registrarFormato(trozo.texto());
                     ctx.emitir("    la a0, " + et);
                     ctx.emitir("    jal ra, rt_print_cstr");
                 }
@@ -37,116 +34,63 @@ public final class EmisorES {
             }
             MemoryAccess op = operandos != null && indice < operandos.size() ? operandos.get(indice) : null;
             String esp = especificadores != null && indice < especificadores.size()
-                    ? especificadores.get(indice) : "%d";
+                    ? especificadores.get(indice) : trozo.texto();
             indice++;
             imprimirOperando(op, esp);
-        }
-        if (operandos != null && indice < operandos.size()) {
-            for (int i = indice; i < operandos.size(); i++) {
-                imprimirOperando(operandos.get(i),
-                        especificadores != null && i < especificadores.size()
-                                ? especificadores.get(i) : "%d");
-            }
         }
     }
 
     private void imprimirOperando(MemoryAccess op, String esp) {
-        String especificador = esp == null ? "%d" : esp.trim();
-        if (op == null) {
-            ctx.emitir("    li a0, 0");
-            ctx.emitir("    jal ra, rt_print_int");
-            return;
-        }
-        TipoRV t = ctx.getTipoRV(op);
-        switch (especificador) {
+        String e = esp == null ? "%d" : esp.trim();
+        TipoRV t = op != null ? ctx.getTipoRV(op) : TipoRV.ENTERO;
+        switch (e) {
             case "%s" -> {
+                memoria.cargarEntero(op, "a0");
                 if (t == TipoRV.BOOL) {
-                    cargar(op, "a0", TipoRV.BOOL);
                     ctx.emitir("    jal ra, rt_print_bool");
                 } else {
-                    cargar(op, "a0", TipoRV.REF);
                     ctx.emitir("    jal ra, rt_print_str");
                 }
             }
             case "%c" -> {
-                cargar(op, "a0", TipoRV.CHAR);
+                memoria.cargarEntero(op, "a0");
                 ctx.emitir("    jal ra, rt_print_char");
             }
-            case "%g" -> {
-                cargar(op, "fa0", TipoRV.DOBLE);
+            case "%g", "%f", "%e" -> {
+                memoria.cargarDouble(op, "fa0");
                 ctx.emitir("    jal ra, rt_print_g");
             }
             case "%p" -> {
-                cargar(op, "a0", TipoRV.REF);
+                memoria.cargarEntero(op, "a0");
                 ctx.emitir("    jal ra, rt_print_ptr");
             }
             default -> {
-                // %d y otros: entero
-                cargar(op, "a0", TipoRV.ENTERO);
+                memoria.cargarEntero(op, "a0");
                 ctx.emitir("    jal ra, rt_print_int");
             }
         }
     }
 
     public void leer(Leer3D leer) {
-        String fmt = leer.getFormato() == null ? "" : leer.getFormato().trim();
-        MemoryAccess res = leer.getResult();
-        TipoRV tRes = ctx.getTipoRV(res);
+        String fmt = leer.getFormato() == null ? "%d" : leer.getFormato().replace(" ", "");
+        MemoryAccess destino = leer.getResult();
         switch (fmt) {
             case "%s" -> {
-                // malloc 256 bytes en Str (s2)
-                ctx.emitir("    mv t0, s2");
-                ctx.emitir("    addi s2, s2, 256");
-                ctx.emitir("    mv a0, t0");
+                memoria.cargarEntero(destino, "a0");
                 ctx.emitir("    jal ra, rt_read_str");
-                // guardar dirección en resultado
-                guardar(res, TipoRV.REF, "t0");
-            }
-            case "%lf" -> {
-                ctx.emitir("    jal ra, rt_read_double");
-                guardar(res, TipoRV.DOBLE, "fa0");
             }
             case "%c" -> {
                 ctx.emitir("    jal ra, rt_read_char");
-                guardar(res, TipoRV.CHAR, "a0");
+                memoria.guardarEntero(destino, "a0");
             }
-            default -> { // %d
+            case "%lf", "%f", "%g" -> {
+                ctx.emitir("    jal ra, rt_read_double");
+                memoria.guardarDouble(destino, "fa0");
+            }
+            default -> {
                 ctx.emitir("    jal ra, rt_read_int");
-                guardar(res, TipoRV.ENTERO, "a0");
+                memoria.guardarEntero(destino, "a0");
             }
         }
-    }
-
-    private void cargar(MemoryAccess op, String reg, TipoRV t) {
-        if (op == null) {
-            if (t == TipoRV.DOBLE) ctx.emitir("    fcvt.d.w " + reg + ", zero");
-            else ctx.emitir("    li " + reg + ", 0");
-            return;
-        }
-        if (t == TipoRV.DOBLE) {
-            ctx.emitir("    fld " + reg + ", " + ctx.getOffset(op) + "(s0)");
-        } else {
-            ctx.emitir("    lw " + reg + ", " + ctx.getOffset(op) + "(s0)");
-        }
-    }
-
-    private void guardar(MemoryAccess dest, TipoRV t, String srcReg) {
-        if (dest instanceof cunoc.compi2.alien_code.c3d.access.NameAccess na) {
-            if (na.isAutoreferencia() || "self".equals(na.getNombre())) {
-                int off = -8;
-                if (t == TipoRV.DOBLE) ctx.emitir("    fsd " + srcReg + ", " + off + "(s0)");
-                else ctx.emitir("    sw " + srcReg + ", " + off + "(s0)");
-                return;
-            }
-            if (na.isGlobal()) {
-                int off = ctx.getOffsetGlobal(na.getNombre());
-                if (t == TipoRV.DOBLE) ctx.emitir("    fsd " + srcReg + ", " + off + "(s0)");
-                else ctx.emitir("    sw " + srcReg + ", " + off + "(s0)");
-                return;
-            }
-        }
-        int off = ctx.getOffset(dest);
-        if (t == TipoRV.DOBLE) ctx.emitir("    fsd " + srcReg + ", " + off + "(s0)");
-        else ctx.emitir("    sw " + srcReg + ", " + off + "(s0)");
     }
 }

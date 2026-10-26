@@ -40,11 +40,30 @@ import cunoc.compi2.alien_code.ylang.grammar.YLangParser;
 
 public class YLangASTBuilder extends YLangParserBaseVisitor<Node> {
 
+    private final cunoc.compi2.alien_code.errors.ErrorListener erroresSintaxis =
+            new cunoc.compi2.alien_code.errors.ErrorListener();
+
+    public cunoc.compi2.alien_code.errors.ErrorListener getErroresSintaxis() {
+        return erroresSintaxis;
+    }
+
     public ProgramNode construir(String codigo) {
         YLangLexer lexer = new YLangLexer(CharStreams.fromString(codigo));
+        lexer.removeErrorListeners();
+        lexer.addErrorListener(cunoc.compi2.alien_code.errors.AntlrSintaxis.hacia(erroresSintaxis));
         CommonTokenStream tokens = new CommonTokenStream(lexer);
         YLangParser parser = new YLangParser(tokens);
-        return (ProgramNode) visitPrograma(parser.programa());
+        parser.removeErrorListeners();
+        parser.addErrorListener(cunoc.compi2.alien_code.errors.AntlrSintaxis.hacia(erroresSintaxis));
+        try {
+            return (ProgramNode) visitPrograma(parser.programa());
+        } catch (RuntimeException e) {
+            if (!erroresSintaxis.hasErrors()) {
+                erroresSintaxis.addError(cunoc.compi2.alien_code.errors.ErrorType.SINTACTICO,
+                        String.valueOf(e), 0, 0);
+            }
+            return null;
+        }
     }
 
     @Override

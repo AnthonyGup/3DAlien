@@ -168,7 +168,7 @@ expresionIgualdad
     ;
 
 expresionRelacional
-    : expresionAditiva ((MENOR | MAYOR) expresionAditiva)*
+    : expresionAditiva ((MENOR | MAYOR | MENOR_IGUAL | MAYOR_IGUAL) expresionAditiva)*
     ;
 
 expresionAditiva
