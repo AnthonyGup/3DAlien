@@ -43,22 +43,6 @@ public class IntermediateCodeGenerator implements CodigoContexto {
     private int totalGlobales = -1;
     private final ClaseLayouts layouts;
 
-    public static final class Marco {
-        public final String nombre;
-        public final boolean esFuncion;
-        public boolean tieneSelf = false;
-        public final Map<String, Integer> parametros = new LinkedHashMap<>();
-        public final Map<Symbol, Integer> locales = new IdentityHashMap<>();
-        public final Map<Integer, Integer> temporales = new HashMap<>();
-        public int alto = 3;
-        public int tamano = -1;
-
-        Marco(String nombre, boolean esFuncion) {
-            this.nombre = nombre;
-            this.esFuncion = esFuncion;
-        }
-    }
-
     public IntermediateCodeGenerator(ErrorListener errorListener) {
         this(errorListener, null);
     }
@@ -178,10 +162,6 @@ public class IntermediateCodeGenerator implements CodigoContexto {
     public int getTotalGlobales() {
         finalizarLayout();
         return totalGlobales;
-    }
-
-    public Marco getMarcoActual() {
-        return marcos.peek();
     }
 
     private void finalizarLayout() {

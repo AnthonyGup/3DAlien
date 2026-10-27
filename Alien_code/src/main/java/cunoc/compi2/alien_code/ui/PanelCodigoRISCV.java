@@ -1,18 +1,19 @@
 package cunoc.compi2.alien_code.ui;
 
+import cunoc.compi2.alien_code.runner.RarsRunner;
+import cunoc.compi2.alien_code.runner.RuntimeRiscV;
+
 import java.awt.BorderLayout;
 import java.awt.Color;
-import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.Insets;
-import java.awt.Window;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.util.function.Supplier;
 import javax.swing.JButton;
-import javax.swing.JDialog;
 import javax.swing.JFileChooser;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
@@ -20,10 +21,11 @@ import javax.swing.SwingUtilities;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 import org.fife.ui.rtextarea.RTextScrollPane;
 
-import cunoc.compi2.alien_code.runner.RarsRunner;
-import cunoc.compi2.alien_code.runner.RuntimeRiscV;
-
-public class VentanaCodigoRISCV extends JDialog {
+/**
+ * Visor del codigo RISC-V generado, embebido en la ventana principal
+ * (pestana inferior junto al Log). Sustituye a la antigua VentanaCodigoRISCV.
+ */
+public class PanelCodigoRISCV extends JPanel {
 
     private static final Color BG_DARK = new Color(0x1E, 0x1E, 0x1E);
     private static final Color FG_LIGHT = new Color(0xD4, 0xD4, 0xD4);
@@ -31,14 +33,12 @@ public class VentanaCodigoRISCV extends JDialog {
 
     private final RSyntaxTextArea area;
     private final PanelLog log;
-    private final File carpetaProyecto;
-    private final String contenidoOriginal;
+    private final Supplier<File> carpetaProyecto;
+    private Runnable alEjecutar;
 
-    public VentanaCodigoRISCV(Window propietario, String titulo, String contenido, PanelLog log, File carpetaProyecto) {
-        super(propietario, titulo);
+    public PanelCodigoRISCV(PanelLog log, Supplier<File> carpetaProyecto) {
         this.log = log;
         this.carpetaProyecto = carpetaProyecto;
-        this.contenidoOriginal = contenido;
 
         Font font = new Font("JetBrains Mono", Font.PLAIN, 13);
         if (!font.getFamily().equals("JetBrains Mono")) {
@@ -52,10 +52,9 @@ public class VentanaCodigoRISCV extends JDialog {
         area.setSyntaxEditingStyle("text/x-asm");
         area.setCodeFoldingEnabled(true);
         area.setAntiAliasingEnabled(true);
-        area.setAutoIndentEnabled(true);
         area.setTabSize(4);
         area.setEditable(false);
-        area.setText(contenido);
+        area.setText("");
         area.setCaretPosition(0);
         area.setBackground(BG_DARK);
         area.setForeground(FG_LIGHT);
@@ -63,6 +62,7 @@ public class VentanaCodigoRISCV extends JDialog {
         area.setSelectionColor(SELECTION_BG);
         area.setMargin(new Insets(8, 12, 8, 12));
         ((javax.swing.text.DefaultCaret) area.getCaret()).setUpdatePolicy(javax.swing.text.DefaultCaret.NEVER_UPDATE);
+        area.setFont(font);
 
         JButton botonGuardar = new JButton("Guardar .s");
         estilizarBoton(botonGuardar, new Color(0x0E, 0x63, 0x9C));
@@ -89,16 +89,19 @@ public class VentanaCodigoRISCV extends JDialog {
         scrollPane.setBackground(BG_DARK);
 
         setLayout(new BorderLayout());
+        setBackground(BG_DARK);
         add(scrollPane, BorderLayout.CENTER);
         add(panelInferior, BorderLayout.SOUTH);
+    }
 
-        getContentPane().setBackground(BG_DARK);
+    public void setContenido(String contenido) {
+        area.setText(contenido == null ? "" : contenido);
+        area.setCaretPosition(0);
+        area.discardAllEdits();
+    }
 
-        setPreferredSize(new Dimension(950, 600));
-        setMinimumSize(new Dimension(500, 300));
-        pack();
-        setLocationRelativeTo(propietario);
-        setDefaultCloseOperation(DISPOSE_ON_CLOSE);
+    public void setAlEjecutar(Runnable alEjecutar) {
+        this.alEjecutar = alEjecutar;
     }
 
     private void estilizarBoton(JButton b, Color bg) {
@@ -122,8 +125,9 @@ public class VentanaCodigoRISCV extends JDialog {
     private void guardar() {
         JFileChooser chooser = new JFileChooser();
         chooser.setDialogTitle("Guardar código RISC-V");
-        if (carpetaProyecto != null && carpetaProyecto.isDirectory()) {
-            chooser.setCurrentDirectory(carpetaProyecto);
+        File carpeta = carpetaProyecto.get();
+        if (carpeta != null && carpeta.isDirectory()) {
+            chooser.setCurrentDirectory(carpeta);
         }
         chooser.setSelectedFile(new File("programa.s"));
         if (chooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
@@ -142,10 +146,14 @@ public class VentanaCodigoRISCV extends JDialog {
             JOptionPane.showMessageDialog(this, "No hay log disponible para mostrar salida.");
             return;
         }
+        if (alEjecutar != null) {
+            alEjecutar.run();
+        }
 
+        File carpeta = carpetaProyecto.get();
         File baseDir;
-        if (carpetaProyecto != null && carpetaProyecto.isDirectory()) {
-            baseDir = new File(carpetaProyecto, "build");
+        if (carpeta != null && carpeta.isDirectory()) {
+            baseDir = new File(carpeta, "build");
         } else {
             baseDir = new File(System.getProperty("user.dir"), "build");
         }

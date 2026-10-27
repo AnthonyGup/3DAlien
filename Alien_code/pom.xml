@@ -40,6 +40,34 @@
 
     <build>
         <plugins>
+            <!-- RARS is a local system dependency, so include its classes and resources explicitly. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-antrun-plugin</artifactId>
+                <version>3.1.0</version>
+                <executions>
+                    <execution>
+                        <id>include-rars</id>
+                        <phase>process-classes</phase>
+                        <goals>
+                            <goal>run</goal>
+                        </goals>
+                        <configuration>
+                            <target>
+                                <unzip src="${project.basedir}/libs/rars.jar" dest="${project.build.outputDirectory}">
+                                    <patternset>
+                                        <exclude name="META-INF/MANIFEST.MF"/>
+                                        <exclude name="META-INF/*.SF"/>
+                                        <exclude name="META-INF/*.RSA"/>
+                                        <exclude name="META-INF/*.DSA"/>
+                                    </patternset>
+                                </unzip>
+                            </target>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
             <!-- ANTLR4 Maven Plugin -->
             <plugin>
                 <groupId>org.antlr</groupId>

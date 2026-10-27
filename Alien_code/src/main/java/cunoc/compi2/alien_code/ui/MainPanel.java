@@ -5,22 +5,34 @@ import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
 import javax.swing.JPanel;
 import javax.swing.JSplitPane;
+import javax.swing.JTabbedPane;
 import javax.swing.border.EmptyBorder;
 
 public class MainPanel extends JPanel {
 
+    private static final int PESTANA_LOG = 0;
+    private static final int PESTANA_RISCV = 1;
+
     private final PanelArbolProyecto arbolProyecto;
     private final PanelEditorTabs editorTabs;
     private final PanelLog panelLog;
+    private final PanelCodigoRISCV panelRiscV;
+    private final JTabbedPane pestanasInferiores;
 
-    public MainPanel(PanelArbolProyecto arbolProyecto, PanelEditorTabs editorTabs, PanelLog panelLog) {
+    public MainPanel(PanelArbolProyecto arbolProyecto, PanelEditorTabs editorTabs,
+            PanelLog panelLog, PanelCodigoRISCV panelRiscV) {
         this.arbolProyecto = arbolProyecto;
         this.editorTabs = editorTabs;
         this.panelLog = panelLog;
+        this.panelRiscV = panelRiscV;
 
         setLayout(new BorderLayout());
 
-        JSplitPane vertical = new JSplitPane(JSplitPane.VERTICAL_SPLIT, editorTabs, panelLog);
+        pestanasInferiores = new JTabbedPane();
+        pestanasInferiores.addTab("Log", panelLog);
+        pestanasInferiores.addTab("RISC-V", panelRiscV);
+
+        JSplitPane vertical = new JSplitPane(JSplitPane.VERTICAL_SPLIT, editorTabs, pestanasInferiores);
         vertical.setResizeWeight(0.67);
         vertical.setContinuousLayout(true);
 
@@ -41,6 +53,14 @@ public class MainPanel extends JPanel {
         add(horizontal, BorderLayout.CENTER);
     }
 
+    public void mostrarPestanaLog() {
+        pestanasInferiores.setSelectedIndex(PESTANA_LOG);
+    }
+
+    public void mostrarPestanaRiscV() {
+        pestanasInferiores.setSelectedIndex(PESTANA_RISCV);
+    }
+
     public PanelArbolProyecto getArbolProyecto() {
         return arbolProyecto;
     }
@@ -51,5 +71,9 @@ public class MainPanel extends JPanel {
 
     public PanelLog getPanelLog() {
         return panelLog;
+    }
+
+    public PanelCodigoRISCV getPanelRiscV() {
+        return panelRiscV;
     }
 }

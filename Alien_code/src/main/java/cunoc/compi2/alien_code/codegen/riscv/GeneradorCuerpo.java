@@ -47,8 +47,7 @@ public final class GeneradorCuerpo {
             }
         }
 
-        MarcoRiscV mMain = new MarcoRiscV();
-        mMain.nombre = "main";
+        MarcoRiscV mMain = MarcoRiscV.desde("main", "");
         ctx.setMarcoActual(mMain);
         ctx.setCuerpoActual(topLevel);
         analizar(topLevel, mMain);
@@ -64,9 +63,7 @@ public final class GeneradorCuerpo {
         epilogo(mMain, true);
 
         for (Bloque b : funciones) {
-            MarcoRiscV m = new MarcoRiscV();
-            m.nombre = b.inicio().getNombre();
-            parsearParams(m, b.inicio().getDescripcion());
+            MarcoRiscV m = MarcoRiscV.desde(b.inicio().getNombre(), b.inicio().getDescripcion());
             ctx.setMarcoActual(m);
             ctx.setCuerpoActual(b.cuerpo());
             analizar(b.cuerpo(), m);
@@ -134,26 +131,6 @@ public final class GeneradorCuerpo {
         }
     }
 
-    private void parsearParams(MarcoRiscV m, String desc) {
-        if (desc == null || desc.isBlank()) return;
-        int slot = 3;
-        for (String p : desc.split(";")) {
-            String nom = p.trim();
-            String tipoStr = "";
-            int idx = nom.indexOf(':');
-            if (idx > 0) {
-                tipoStr = nom.substring(idx + 1).trim();
-                nom = nom.substring(0, idx).trim();
-            }
-            if (nom.isEmpty()) continue;
-            if ("self".equals(nom)) {
-                m.agregarParam("self", TipoRV.REF, 2);
-            } else {
-                m.agregarParam(nom, TipoRV.desdeString(tipoStr), slot++);
-            }
-        }
-    }
-
     private void regarParams(MarcoRiscV m) {
         List<TipoRV> tipos = new ArrayList<>();
         for (MarcoRiscV.Param p : m.params) tipos.add(p.tipo);
@@ -161,7 +138,7 @@ public final class GeneradorCuerpo {
         for (int i = 0; i < m.params.size(); i++) {
             MarcoRiscV.Param p = m.params.get(i);
             ConvencionLlamada.UbicacionArg u = ubicaciones.get(i);
-            int destino = m.slotByte(p.slot);
+            int destino = ctx.slotByte(p.slot);
             switch (u.donde()) {
                 case REG_ENTERO -> AccesoMemoria.emitir(ctx, "sw", "a" + u.indiceReg(), "s0", destino);
                 case REG_DOBLE -> AccesoMemoria.emitir(ctx, "fsd", "fa" + u.indiceReg(), "s0", destino);

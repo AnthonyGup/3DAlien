@@ -4,7 +4,6 @@ import cunoc.compi2.alien_code.c3d.cuartetas.Cuarteta;
 import cunoc.compi2.alien_code.ir.ClaseLayouts;
 import cunoc.compi2.alien_code.semantic.SymbolTable;
 
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 
@@ -41,7 +40,7 @@ public final class RiscVCodeGenerator {
     private void emitirDatos(ContextoRiscV ctx) {
         ctx.emitirDato(".data");
         ctx.emitirDato(".align 3");
-        ctx.emitirDato("Globals: .space " + Math.max(16, ctx.totalGlobalesBytes()));
+        ctx.emitirDato("Globals: .space " + ctx.totalGlobalesBytes());
         ctx.emitirDato(".align 3");
         ctx.emitirDato("Heap: .space 3145728");
         ctx.emitirDato(".align 3");
@@ -62,7 +61,7 @@ public final class RiscVCodeGenerator {
     }
 
     private void emitirBytes(ContextoRiscV ctx, String etiqueta, String texto) {
-        byte[] bytes = texto.getBytes(StandardCharsets.UTF_8);
+        byte[] bytes = ContextoRiscV.codificarUTF8(texto);
         StringBuilder sb = new StringBuilder();
         sb.append(etiqueta).append(": .byte ");
         for (int i = 0; i < bytes.length; i++) {

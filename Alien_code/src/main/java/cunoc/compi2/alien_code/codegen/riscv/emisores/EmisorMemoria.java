@@ -69,15 +69,11 @@ public final class EmisorMemoria {
         String cuenta = corte >= 0 ? inner.substring(0, corte).trim() : inner;
 
         if (corte < 0 && cuenta.startsWith("sizeof(")) {
-            String tipo = cuenta.substring("sizeof(struct ".length(), cuenta.length() - 1).trim();
-            int slots;
-            int id = -1;
-            if (ctx.layouts() != null && ctx.layouts().contiene(tipo)) {
-                slots = Math.max(1, ctx.layouts().tamanoDe(tipo));
-                id = ctx.layouts().idDe(tipo);
-            } else {
-                slots = Math.max(1, ctx.camposDe(tipo));
-            }
+            String tipo = cuenta.startsWith("sizeof(struct ")
+                    ? cuenta.substring("sizeof(struct ".length(), cuenta.length() - 1).trim()
+                    : "";
+            int slots = ctx.layoutsRiscV().slots(tipo);
+            int id = ctx.layoutsRiscV().idClase(tipo);
             reservar(destino, slots);
             if (id >= 0) {
                 ctx.emitir("    li t1, " + id);
@@ -89,23 +85,30 @@ public final class EmisorMemoria {
             reservar(destino, Integer.parseInt(cuenta));
             return;
         }
-        evaluarCuenta(cuenta, "t1");
-        ctx.emitir("    slli t1, t1, 3");
-        ctx.emitir("    mv t0, s1");
-        ctx.emitir("    add s1, s1, t1");
+        avanzarHeapCuenta(cuenta);
         guardarEntero(destino, "t0");
     }
 
     private void reservar(MemoryAccess destino, int slots) {
+        avanzarHeap(Math.max(1, slots) * 8);
+        guardarEntero(destino, "t0");
+    }
+
+    private void avanzarHeap(int bytes) {
         ctx.emitir("    mv t0, s1");
-        int bytes = Math.max(1, slots) * 8;
         if (bytes <= 2047) {
             ctx.emitir("    addi s1, s1, " + bytes);
         } else {
             ctx.emitir("    li t1, " + bytes);
             ctx.emitir("    add s1, s1, t1");
         }
-        guardarEntero(destino, "t0");
+    }
+
+    private void avanzarHeapCuenta(String cuenta) {
+        evaluarCuenta(cuenta, "t1");
+        ctx.emitir("    slli t1, t1, 3");
+        ctx.emitir("    mv t0, s1");
+        ctx.emitir("    add s1, s1, t1");
     }
 
     private void evaluarCuenta(String expr, String reg) {
@@ -351,13 +354,7 @@ public final class EmisorMemoria {
     public void declararArreglo(DeclararArreglo3D arreglo) {
         long total = totalDimensiones(arreglo.getDims());
         int bytes = (int) (Math.max(1, total) * 8);
-        ctx.emitir("    mv t0, s1");
-        if (bytes <= 2047) {
-            ctx.emitir("    addi s1, s1, " + bytes);
-        } else {
-            ctx.emitir("    li t1, " + bytes);
-            ctx.emitir("    add s1, s1, t1");
-        }
+        avanzarHeap(bytes);
         NameAccess na = ctx.accesoDeNombre(arreglo.getNombre());
         if (na == null) return;
         if (na.isGlobal()) {
@@ -385,124 +382,94 @@ public final class EmisorMemoria {
     // -------------------------------------------------------------------- cargas
 
     public void cargarEntero(MemoryAccess op, String reg) {
-        cargarEntero(op, reg, 0);
+        cargar(op, reg, false, 0);
     }
 
     public void cargarEntero(MemoryAccess op, String reg, int depth) {
+        cargar(op, reg, false, depth);
+    }
+
+    public void cargarDouble(MemoryAccess op, String freg) {
+        cargar(op, freg, true, 0);
+    }
+
+    private void cargar(MemoryAccess op, String reg, boolean doble, int depth) {
         if (op == null) {
-            ctx.emitir("    li " + reg + ", 0");
+            cero(reg, doble);
             return;
         }
         if (op instanceof Literal3D lit) {
-            literalEntero(lit, reg);
+            if (doble) {
+                literalDouble(lit, reg);
+            } else {
+                literalEntero(lit, reg);
+            }
             return;
         }
         if (op instanceof NameAccess na) {
-            cargarNombre(na, reg);
+            cargarNombre(na, reg, doble);
             return;
         }
         if (op instanceof TemporalAccess ta) {
-            if (ta.getOffset() < 0) {
-                ctx.error("temporal sin slot: t" + ta.getNumero());
-                ctx.emitir("    li " + reg + ", 0");
-                return;
-            }
-            if (ctx.getTipoRV(ta) == TipoRV.DOBLE) {
-                AccesoMemoria.emitir(ctx, "fld", "ft0", "s0", ctx.slotByte(ta.getOffset()));
-                ctx.emitir("    fcvt.w.d " + reg + ", ft0, rtz");
-            } else {
-                AccesoMemoria.emitir(ctx, "lw", reg, "s0", ctx.slotByte(ta.getOffset()));
-            }
+            cargarTemporal(ta, reg, doble);
             return;
         }
         if (op instanceof CampoAccess || op instanceof IndiceAccess) {
             direccionPool(op, depth);
-            ctx.emitir("    lw " + reg + ", 0(" + POOL[depth] + ")");
+            emitirCarga(POOL[depth], 0, reg, doble);
             return;
         }
         if (op instanceof LabelAccess) {
             ctx.error("etiqueta usada como valor");
-            ctx.emitir("    li " + reg + ", 0");
+            cero(reg, doble);
             return;
         }
         ctx.error("operando no soportado: " + op.getClass().getSimpleName());
-        ctx.emitir("    li " + reg + ", 0");
+        cero(reg, doble);
     }
 
-    public void cargarDouble(MemoryAccess op, String freg) {
-        if (op == null) {
-            ctx.emitir("    fcvt.d.w " + freg + ", zero");
-            return;
-        }
-        if (op instanceof Literal3D lit) {
-            literalDouble(lit, freg);
-            return;
-        }
-        if (op instanceof NameAccess na) {
-            if (na.isAutoreferencia() || "self".equals(na.getNombre())) {
-                AccesoMemoria.emitir(ctx, "lw", "t0", "s0", ctx.slotByte(2));
-                if (na.isAutoreferencia()) {
-                    sumarOffset("t0", Math.max(0, na.getOffset()) * 8);
-                }
-                ctx.emitir("    fld " + freg + ", 0(t0)");
-                return;
-            }
-            if (na.getOffset() < 0) {
-                ctx.error("variable sin slot: " + na.getNombre());
-                ctx.emitir("    fcvt.d.w " + freg + ", zero");
-                return;
-            }
-            if (na.isGlobal()) {
-                ctx.emitir("    la t0, Globals");
-                AccesoMemoria.emitir(ctx, "fld", freg, "t0", ctx.globalByte(na.getOffset()));
-            } else {
-                AccesoMemoria.emitir(ctx, "fld", freg, "s0", ctx.slotByte(na.getOffset()));
-            }
-            return;
-        }
-        if (op instanceof TemporalAccess ta) {
-            if (ta.getOffset() < 0) {
-                ctx.error("temporal sin slot: t" + ta.getNumero());
-                ctx.emitir("    fcvt.d.w " + freg + ", zero");
-                return;
-            }
-            AccesoMemoria.emitir(ctx, "fld", freg, "s0", ctx.slotByte(ta.getOffset()));
-            return;
-        }
-        if (op instanceof CampoAccess || op instanceof IndiceAccess) {
-            direccionPool(op, 0);
-            ctx.emitir("    fld " + freg + ", 0(t0)");
-            return;
-        }
-        ctx.error("operando no soportado: " + op.getClass().getSimpleName());
-        ctx.emitir("    fcvt.d.w " + freg + ", zero");
-    }
-
-    private void cargarNombre(NameAccess na, String reg) {
+    private void cargarNombre(NameAccess na, String reg, boolean doble) {
         if (na.isAutoreferencia() || "self".equals(na.getNombre())) {
-            AccesoMemoria.emitir(ctx, "lw", reg, "s0", ctx.slotByte(2));
+            String addr = doble ? "t0" : reg;
+            emitirCarga("s0", ctx.slotByte(2), addr, false);
             if (na.isAutoreferencia()) {
-                sumarOffset(reg, Math.max(0, na.getOffset()) * 8);
-                ctx.emitir("    lw " + reg + ", 0(" + reg + ")");
+                sumarOffset(addr, Math.max(0, na.getOffset()) * 8);
             }
-            return;
-        }
-        if (na.isGlobal()) {
-            if (na.getOffset() < 0) {
-                ctx.error("global sin slot: " + na.getNombre());
-                ctx.emitir("    li " + reg + ", 0");
-                return;
+            if (doble || na.isAutoreferencia()) {
+                emitirCarga(addr, 0, reg, doble);
             }
-            ctx.emitir("    la " + reg + ", Globals");
-            AccesoMemoria.emitir(ctx, "lw", reg, reg, ctx.globalByte(na.getOffset()));
             return;
         }
         if (na.getOffset() < 0) {
-            ctx.error("variable sin slot: " + na.getNombre());
-            ctx.emitir("    li " + reg + ", 0");
+            String mensaje = !doble && na.isGlobal() ? "global sin slot: " : "variable sin slot: ";
+            ctx.error(mensaje + na.getNombre());
+            cero(reg, doble);
             return;
         }
-        AccesoMemoria.emitir(ctx, "lw", reg, "s0", ctx.slotByte(na.getOffset()));
+        if (na.isGlobal()) {
+            String base = doble ? "t0" : reg;
+            ctx.emitir("    la " + base + ", Globals");
+            emitirCarga(base, ctx.globalByte(na.getOffset()), reg, doble);
+            return;
+        }
+        emitirCarga("s0", ctx.slotByte(na.getOffset()), reg, doble);
+    }
+
+    private void cargarTemporal(TemporalAccess ta, String reg, boolean doble) {
+        if (ta.getOffset() < 0) {
+            ctx.error("temporal sin slot: t" + ta.getNumero());
+            cero(reg, doble);
+            return;
+        }
+        int offset = ctx.slotByte(ta.getOffset());
+        if (doble) {
+            emitirCarga("s0", offset, reg, true);
+        } else if (ctx.getTipoRV(ta) == TipoRV.DOBLE) {
+            emitirCarga("s0", offset, "ft0", true);
+            ctx.emitir("    fcvt.w.d " + reg + ", ft0, rtz");
+        } else {
+            emitirCarga("s0", offset, reg, false);
+        }
     }
 
     private void literalEntero(Literal3D lit, String reg) {
@@ -574,50 +541,17 @@ public final class EmisorMemoria {
         }
         String r = POOL[depth];
         if (op instanceof CampoAccess ca) {
-            cargarPool(ca.getBase(), depth);
+            cargarEntero(ca.getBase(), POOL[depth], depth);
             sumarOffset(r, Math.max(0, ca.getOffset()) * 8);
         } else if (op instanceof IndiceAccess ia) {
-            cargarPool(ia.getBase(), depth);
+            cargarEntero(ia.getBase(), POOL[depth], depth);
             String ir = POOL[depth + 1];
-            cargarPool(ia.getIndice(), depth + 1);
+            cargarEntero(ia.getIndice(), POOL[depth + 1], depth + 1);
             ctx.emitir("    slli " + ir + ", " + ir + ", 3");
             ctx.emitir("    add " + r + ", " + r + ", " + ir);
         } else {
             throw new IllegalStateException("direccion de operando simple");
         }
-    }
-
-    private void cargarPool(MemoryAccess op, int depth) {
-        String r = POOL[depth];
-        if (op instanceof Literal3D lit) {
-            literalEntero(lit, r);
-            return;
-        }
-        if (op instanceof NameAccess na) {
-            cargarNombre(na, r);
-            return;
-        }
-        if (op instanceof TemporalAccess ta) {
-            if (ta.getOffset() < 0) {
-                ctx.error("temporal sin slot: t" + ta.getNumero());
-                ctx.emitir("    li " + r + ", 0");
-                return;
-            }
-            if (ctx.getTipoRV(ta) == TipoRV.DOBLE) {
-                AccesoMemoria.emitir(ctx, "fld", "ft0", "s0", ctx.slotByte(ta.getOffset()));
-                ctx.emitir("    fcvt.w.d " + r + ", ft0, rtz");
-            } else {
-                AccesoMemoria.emitir(ctx, "lw", r, "s0", ctx.slotByte(ta.getOffset()));
-            }
-            return;
-        }
-        if (op instanceof CampoAccess || op instanceof IndiceAccess) {
-            direccionPool(op, depth);
-            ctx.emitir("    lw " + r + ", 0(" + r + ")");
-            return;
-        }
-        ctx.error("operando no soportado: " + op.getClass().getSimpleName());
-        ctx.emitir("    li " + r + ", 0");
     }
 
     // ------------------------------------------------------------------ guardado
@@ -689,6 +623,16 @@ public final class EmisorMemoria {
     }
 
     // -------------------------------------------------------------------- varios
+
+    private void emitirCarga(String base, int offset, String reg, boolean doble) {
+        AccesoMemoria.emitir(ctx, doble ? "fld" : "lw", reg, base, offset);
+    }
+
+    private void cero(String reg, boolean doble) {
+        ctx.emitir(doble
+                ? "    fcvt.d.w " + reg + ", zero"
+                : "    li " + reg + ", 0");
+    }
 
     private void sumarOffset(String reg, int bytes) {
         if (bytes == 0) return;

@@ -27,6 +27,33 @@ public final class MarcoRiscV {
 
     public MarcoRiscV() {}
 
+    public static MarcoRiscV desde(String nombre, String descripcion) {
+        MarcoRiscV marco = new MarcoRiscV();
+        marco.nombre = nombre;
+        if (descripcion == null || descripcion.isBlank()) {
+            return marco;
+        }
+        int slot = 3;
+        for (String p : descripcion.split(";")) {
+            String param = p.trim();
+            String tipo = "";
+            int idx = param.indexOf(':');
+            if (idx > 0) {
+                tipo = param.substring(idx + 1).trim();
+                param = param.substring(0, idx).trim();
+            }
+            if (param.isEmpty()) {
+                continue;
+            }
+            if ("self".equals(param)) {
+                marco.agregarParam("self", TipoRV.REF, 2);
+            } else {
+                marco.agregarParam(param, TipoRV.desdeString(tipo), slot++);
+            }
+        }
+        return marco;
+    }
+
     public void agregarParam(String nombre, TipoRV tipo, int slot) {
         params.add(new Param(nombre, tipo, slot));
         if (slot > maxSlot) maxSlot = slot;
@@ -35,9 +62,5 @@ public final class MarcoRiscV {
     public int tamano() {
         int base = 16 + 8 * (maxSlot + 1) + salientes;
         return (base + 15) & ~15;
-    }
-
-    public int slotByte(int slot) {
-        return -(12 + 8 * slot);
     }
 }

@@ -38,6 +38,7 @@ public class VentanaPrincipal extends JFrame {
     private final VentanaReporte ventanaErrores;
     private final VentanaReporte ventanaSimbolos;
     private final VentanaReporte ventanaCuartetas;
+    private final PanelCodigoRISCV panelRiscV;
     private File carpetaProyecto;
     private String codigoCActual;
     private String codigoRiscVActual;
@@ -52,7 +53,9 @@ public class VentanaPrincipal extends JFrame {
         PanelArbolProyecto arbolProyecto = new PanelArbolProyecto();
         PanelEditorTabs editorTabs = new PanelEditorTabs();
         PanelLog panelLog = new PanelLog();
-        mainPanel = new MainPanel(arbolProyecto, editorTabs, panelLog);
+        panelRiscV = new PanelCodigoRISCV(panelLog, () -> carpetaProyecto);
+        mainPanel = new MainPanel(arbolProyecto, editorTabs, panelLog, panelRiscV);
+        panelRiscV.setAlEjecutar(() -> mainPanel.mostrarPestanaLog());
 
         menuBar = new VentanaMenuBar();
         setJMenuBar(menuBar);
@@ -315,6 +318,7 @@ public class VentanaPrincipal extends JFrame {
                 analizador.getSymbolTable(), generador.getTiposTemporales(), generador.getLayouts());
         codigoRiscVActual = new RiscVCodeGenerator().generate(instrucciones,
                 analizador.getSymbolTable(), generador.getTiposTemporales(), generador.getLayouts());
+        panelRiscV.setContenido(codigoRiscVActual);
         log.agregarExito("C\u00f3digo C generado (" + numeroC3D + " instrucciones). Ver Reportes > Ver c\u00f3digo C.");
         log.agregarExito("C\u00f3digo RISC-V generado. Ver Reportes > Ver c\u00f3digo RISC-V generado.");
     }
@@ -461,8 +465,8 @@ public class VentanaPrincipal extends JFrame {
             log.agregarPendiente("Compila un archivo primero para generar código RISC-V.");
             return;
         }
-        VentanaCodigoRISCV ventana = new VentanaCodigoRISCV(this, "Código RISC-V generado", codigoRiscVActual, log, carpetaProyecto);
-        ventana.setVisible(true);
+        panelRiscV.setContenido(codigoRiscVActual);
+        mainPanel.mostrarPestanaRiscV();
     }
 
     private void acercaDe() {

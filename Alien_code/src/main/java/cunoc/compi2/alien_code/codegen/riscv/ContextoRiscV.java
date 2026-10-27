@@ -21,7 +21,6 @@ import cunoc.compi2.alien_code.semantic.SymbolTable;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -36,19 +35,15 @@ public final class ContextoRiscV {
     private final List<Cuarteta> todas;
     private final SymbolTable tabla;
     private final Map<Integer, String> tiposTemporales;
-    private final ClaseLayouts layouts;
 
     private final Map<String, Symbol> simbolosPorNombre = new LinkedHashMap<>();
-    private final Map<String, Map<String, Integer>> camposPorTipo = new HashMap<>();
+    private final LayoutsRiscV layoutsRiscV;
 
     private final Map<MemoryAccess, TipoRV> tipoRV = new IdentityHashMap<>();
 
-    private final Map<String, MarcoRiscV> marcos = new LinkedHashMap<>();
     private MarcoRiscV marcoActual;
     private List<Cuarteta> cuerpoActual;
 
-    private final Map<String, Integer> offsetGlobalBytes = new LinkedHashMap<>();
-    private int maxGlobalSlot = -1;
     private int totalGlobalesBytes;
 
     private final Map<String, String> etiquetaCadena = new LinkedHashMap<>();
@@ -68,7 +63,7 @@ public final class ContextoRiscV {
         this.todas = todas == null ? List.of() : todas;
         this.tabla = tabla;
         this.tiposTemporales = tiposTemporales == null ? Map.of() : tiposTemporales;
-        this.layouts = layouts;
+        this.layoutsRiscV = new LayoutsRiscV(tabla, layouts);
     }
 
     public void indexar() {
@@ -77,7 +72,7 @@ public final class ContextoRiscV {
                 simbolosPorNombre.putIfAbsent(s.getName() + "#" + s.getKind(), s);
                 simbolosPorNombre.putIfAbsent(s.getName(), s);
             }
-            int cursor = 0;
+            int maxGlobalSlot = -1;
             for (Symbol s : tabla.listarGlobales()) {
                 if (s.getKind() == Symbol.Kind.VARIABLE && !s.isField() && s.getOffset() >= 0) {
                     maxGlobalSlot = Math.max(maxGlobalSlot, s.getOffset());
@@ -149,38 +144,7 @@ public final class ContextoRiscV {
         return ops;
     }
 
-    public int camposDe(String tipo) {
-        if (tipo == null) return 0;
-        Map<String, Integer> mapa = camposPorTipo.computeIfAbsent(tipo, this::construirCampos);
-        return mapa.size();
-    }
-
-    private Map<String, Integer> construirCampos(String tipo) {
-        Map<String, Integer> mapa = new LinkedHashMap<>();
-        Symbol ts = buscarTipo(tipo);
-        int i = 0;
-        if (ts != null && ts.getMiembros() != null) {
-            for (Symbol f : ts.getMiembros().getTodos()) {
-                if (f.getKind() == Symbol.Kind.VARIABLE) {
-                    mapa.put(f.getName(), i++);
-                }
-            }
-        }
-        return mapa;
-    }
-
-    private Symbol buscarTipo(String nombre) {
-        if (tabla == null) return null;
-        for (Symbol s : tabla.listarGlobales()) {
-            if ((s.getKind() == Symbol.Kind.CLASE || s.getKind() == Symbol.Kind.ESTRUCTURA)
-                    && s.getName().equals(nombre)) {
-                return s;
-            }
-        }
-        return null;
-    }
-
-    public ClaseLayouts layouts() { return layouts; }
+    public LayoutsRiscV layoutsRiscV() { return layoutsRiscV; }
 
     public Symbol simbolo(String nombre) {
         return simbolosPorNombre.get(nombre);
@@ -233,13 +197,6 @@ public final class ContextoRiscV {
 
     public void setMarcoActual(MarcoRiscV m) { marcoActual = m; }
     public MarcoRiscV getMarcoActual() { return marcoActual; }
-    public Map<String, MarcoRiscV> marcos() { return marcos; }
-
-    public int getOffsetGlobal(String nombre) {
-        return offsetGlobalBytes.getOrDefault(nombre, -1);
-    }
-
-    public int maxGlobalSlot() { return maxGlobalSlot; }
     public int totalGlobalesBytes() { return totalGlobalesBytes; }
 
     public String etiquetaCadena(String literal) { return etiquetaCadena.get(literal); }
@@ -257,29 +214,10 @@ public final class ContextoRiscV {
     public void setCuerpoActual(List<Cuarteta> cuerpo) { cuerpoActual = cuerpo; }
     public List<Cuarteta> getCuerpoActual() { return cuerpoActual; }
 
-    public int slotLocal(MemoryAccess op) {
-        if (op instanceof NameAccess na) {
-            if (!na.isGlobal() && !na.isAutoreferencia()) return na.getOffset();
-        }
-        if (op instanceof cunoc.compi2.alien_code.c3d.access.TemporalAccess ta) {
-            return ta.getOffset();
-        }
-        return -1;
-    }
-
     public int globalByte(int slot) { return slot * 8; }
 
     public int slotByte(int slot) {
         return -(12 + 8 * slot);
-    }
-
-    public int campoOffset(String clase, String campo) {
-        if (layouts != null && layouts.contiene(clase)) {
-            return layouts.offsetCampo(clase, campo) * 8;
-        }
-        Map<String, Integer> mapa = camposPorTipo.get(clase);
-        Integer o = mapa != null ? mapa.get(campo) : null;
-        return o != null ? o * 8 : -1;
     }
 
     public String registrarCadena(String texto) {
@@ -295,17 +233,7 @@ public final class ContextoRiscV {
     }
 
     public TipoRV campoTipoDe(String tipoNombre, int idx) {
-        Symbol ts = buscarTipo(tipoNombre);
-        if (ts != null && ts.getMiembros() != null) {
-            int i = 0;
-            for (Symbol f : ts.getMiembros().getTodos()) {
-                if (f.getKind() == Symbol.Kind.VARIABLE) {
-                    if (i == idx) return TipoRV.desde(f.getType());
-                    i++;
-                }
-            }
-        }
-        return TipoRV.ENTERO;
+        return layoutsRiscV.tipoCampo(tipoNombre, idx);
     }
 
     public NameAccess accesoDeNombre(String nombre) {
