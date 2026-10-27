@@ -1,104 +1,77 @@
 # 3DAlien
 
-Compilador de tres lenguajes inventados (Pig Latin, Y?, Zetariano) a C.  
-Proyecto de Compiladores 2, CUNOC.
+3DAlien es una aplicación de escritorio desarrollada para el curso de Compiladores 2 del CUNOC. Compila programas escritos en Pig Latin, Y? y Zetariano a partir de un árbol de sintaxis abstracta común. El resultado incluye cuartetas, código C y ensamblador RISC-V compatible con RARS.
 
----
+La interfaz permite editar archivos, compilar un programa principal, consultar reportes, guardar el código generado y ejecutar el ensamblador mediante el simulador RARS integrado.
 
 ## Lenguajes
 
-| Archivo | Lenguaje | Qué hace |
-|---------|----------|----------|
-| `.pig` | Pig Latin | Programa principal (main = `MAIOR> ... FINIS ;`) |
-| `.y` | Y? | Estructuras y funciones reutilizables (indentación) |
-| `.z` | Zetariano | Clases estilo Java (una por archivo) |
+| Extensión | Lenguaje | Uso en el proyecto |
+|---|---|---|
+| `.pig` | Pig Latin | Programa principal y punto de entrada `MAIOR>` / `FINIS;`. |
+| `.y` | Y? | Funciones y estructuras que pueden importarse desde el programa principal. |
+| `.z` | Zetariano | Clases, atributos, métodos, constructores y herencia. |
 
-El `.pig` importa `.y` y `.z` con `import ruta.con.puntos`.
-
----
+El archivo `.pig` activo declara sus dependencias mediante `import`. Por ejemplo, `import control.Control.z` corresponde a `control/Control.z`, a partir de la carpeta que contiene el archivo principal.
 
 ## Requisitos
 
-- Java 21
-- Maven 3.9+
-- (Opcional) gcc / clang / cl.exe para compilar el `.c` generado
+- Java 21 o superior para ejecutar el JAR.
+- JDK 21 o superior y Maven 3.9 o superior para compilar desde el código fuente.
+- Un entorno gráfico para la interfaz Swing.
+- Opcionalmente, GCC, Clang o `cl.exe` en el `PATH` para compilar el código C generado.
 
----
+El JAR incluye ANTLR, RSyntaxTextArea, RARS y el runtime RISC-V. No incluye la máquina virtual de Java.
 
-## Compilar y ejecutar
+## Ejecutar la aplicación
 
-```bash
+Desde esta carpeta, abre con doble clic `Alien_code/target/Alien_code-1.0-SNAPSHOT.jar` si Windows tiene los archivos `.jar` asociados a Java. También puede ejecutarse desde una terminal:
+
+```powershell
+java -jar Alien_code/target/Alien_code-1.0-SNAPSHOT.jar
+```
+
+Si el JAR todavía no existe o se modificó el código fuente, genera una versión actualizada:
+
+```powershell
 cd Alien_code
-mvn -B clean compile
-mvn exec:java
+mvn clean package
+java -jar target/Alien_code-1.0-SNAPSHOT.jar
 ```
 
-Se abre la ventana de la GUI.
+La compilación necesita el archivo local `Alien_code/libs/rars.jar` y acceso a los repositorios de Maven cuando las dependencias todavía no se encuentran en la caché local.
 
----
+## Uso básico
 
-## Cómo usar la GUI
+1. Selecciona **Archivo > Abrir carpeta de proyecto** y abre la carpeta del programa. Por ejemplo, `pruebas/fase2/04_control`.
+2. Abre el archivo `.pig` principal desde el árbol y guarda los cambios del editor.
+3. Con el `.pig` seleccionado, presiona **Compilar main (.pig)**.
+4. Consulta el log y el menú **Reportes** para revisar errores, símbolos, cuartetas y código generado.
+5. En **Ver código RISC-V generado**, utiliza **Guardar .s** para exportar el ensamblador o **Ejecutar en RARS** para ejecutarlo con el simulador integrado.
+6. En **Ver código C generado**, utiliza **Guardar .c** o **Compilar C** si hay un compilador C disponible.
 
-1. **Archivo → Abrir carpeta de proyecto** — elige la carpeta que tenga tus `.pig`, `.y`, `.z`.
-2. El árbol de la izquierda muestra los archivos. Doble clic abre en el editor.
-3. **Botón "Compilar main (.pig)"** — busca el `.pig` con `MAIOR>`, resuelve imports y compila todo.
-4. El log de abajo muestra errores, warnings y éxito.
-5. **Reportes** → Ver errores / Tabla de símbolos / Cuartetas / C3D / Código C.
-6. En "Ver código C" hay un botón **"Compilar C"** que usa gcc/clang/cl.exe y deja el ejecutable en `carpeta_proyecto/build/`.
+La opción de ejecución RARS de la interfaz entrega una entrada vacía al programa; no proporciona una consola interactiva para leer datos durante la simulación.
 
----
+## Estructura
 
-## Estructura del proyecto
-
-```
+```text
 3DAlien/
-├── MANUAL_TECNICO.md
 ├── README.md
+├── MANUAL_TECNICO.md
 └── Alien_code/
     ├── pom.xml
-    └── src/
-        ├── main/antlr4/...      # 3 gramáticas ANTLR
-        └── main/java/...        # código Java
-            ├── ast/             # 34 nodos únicos
-            ├── semantic/        # semántica 2 pases
-            ├── pigLatin/astbuilder/
-            ├── ylang/astbuilder/
-            ├── zetariano/astbuilder/
-            ├── ir/              # generador de cuartetas
-            ├── c3d/             # accesos + 14 cuartetas
-            ├── codegen/         # CCodeGenerator
-            └── ui/              # GUI Swing
+    ├── libs/rars.jar
+    ├── src/main/antlr4/       Gramáticas ANTLR
+    ├── src/main/java/         Compilador e interfaz
+    ├── src/main/resources/    Runtime RISC-V
+    └── target/                Archivos generados por Maven
+pruebas/
+├── fase1/
+└── fase2/
 ```
 
----
+El directorio `pruebas` es hermano de `3DAlien` en la distribución del proyecto. Cada carpeta de `pruebas/fase2` contiene un caso independiente con sus archivos fuente e importaciones.
 
-## Pipeline
+## Documentación y pruebas
 
-1. **ANTLR** genera lexers/parsers de las 3 gramáticas.
-2. **Builders** convierten ParseTree → AST único (`ast.*`).
-3. **SemanticAnalyzer** en 2 pases:
-   - Pase A: declara structs, funciones, clases (firmas).
-   - Pase B: verifica cuerpos (resuelve imports).
-4. **IntermediateCodeGenerator** emite **cuartetas tipadas** (`c3d.cuartetas.*`).
-5. **CCodeGenerator** render `toCCode` → código C compilable.
-
----
-
-## Build JAR
-
-```bash
-cd Alien_code
-mvn -B clean package
-```
-
-Genera `target/Alien_code-1.0-SNAPSHOT.jar` (fat JAR con dependencias).  
-Ejecutar: `java -jar target/Alien_code-1.0-SNAPSHOT.jar`
-
----
-
-## Notas
-
-- No hay tests automáticos. Se prueba desde la GUI.
-- Validación del `.c` generado: solo visual (no hay gcc en la máquina de desarrollo).
-- No se edita `target/generated-sources/antlr4`.
-- Convenciones: Java 21, nodos POJO, sin comentarios en código, API semántica en español.
+El [manual técnico](MANUAL_TECNICO.md) describe la arquitectura, el proceso de compilación, la generación de código, las pruebas y las limitaciones conocidas. Los ejemplos están disponibles en [`pruebas/fase2`](../pruebas/fase2/).
