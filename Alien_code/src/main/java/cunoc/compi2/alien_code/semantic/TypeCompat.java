@@ -14,7 +14,8 @@ public final class TypeCompat {
         if (destino == null || origen == null) return true;
         if (destino == origen) return true;
         if (destino == Type.FLOAT && origen == Type.INT) return true;
-        if ((destino == Type.STRUCT || destino == Type.CLASS) && origen == Type.NULL) return true;
+        if ((destino == Type.STRUCT || destino == Type.CLASS || destino == Type.STRING)
+                && origen == Type.NULL) return true;
         return false;
     }
 
@@ -33,8 +34,8 @@ public final class TypeCompat {
     public static boolean sonComparables(Type izq, Type der) {
         if (izq == null || der == null) return true;
         if (izq == der) return true;
-        if (izq == Type.NULL && (der == Type.STRUCT || der == Type.CLASS)) return true;
-        if (der == Type.NULL && (izq == Type.STRUCT || izq == Type.CLASS)) return true;
+        if (izq == Type.NULL && (der == Type.STRUCT || der == Type.CLASS || der == Type.STRING)) return true;
+        if (der == Type.NULL && (izq == Type.STRUCT || izq == Type.CLASS || izq == Type.STRING)) return true;
         return esNumerico(izq) && esNumerico(der);
     }
 

@@ -4,4 +4,4 @@
 *.generated.c
 *.exe
 *.class
-
+*.idea

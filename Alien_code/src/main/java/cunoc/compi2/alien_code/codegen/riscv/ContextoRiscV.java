@@ -4,6 +4,7 @@ import cunoc.compi2.alien_code.ast.Type;
 import cunoc.compi2.alien_code.c3d.access.Literal3D;
 import cunoc.compi2.alien_code.c3d.access.MemoryAccess;
 import cunoc.compi2.alien_code.c3d.access.NameAccess;
+import cunoc.compi2.alien_code.c3d.access.TemporalAccess;
 import cunoc.compi2.alien_code.c3d.cuartetas.Asignacion3D;
 import cunoc.compi2.alien_code.c3d.cuartetas.Condicional3D;
 import cunoc.compi2.alien_code.c3d.cuartetas.Cuarteta;
@@ -243,6 +244,72 @@ public final class ContextoRiscV {
                 NameAccess na = buscarNombre(op, nombre);
                 if (na != null) return na;
             }
+        }
+        return null;
+    }
+
+    public int limiteArreglo(MemoryAccess base) {
+        NameAccess nombre = primerNombre(base);
+        String buscado = nombre == null ? null : nombre.getNombre();
+        if (buscado == null) return -1;
+        List<Cuarteta> candidatos = cuerpoActual == null || cuerpoActual.isEmpty() ? todas : cuerpoActual;
+        int limite = buscarLimite(candidatos, buscado);
+        if (limite >= 0) return limite;
+        if (candidatos != todas) return buscarLimite(todas, buscado);
+        return -1;
+    }
+
+    private int buscarLimite(List<Cuarteta> candidatos, String buscado) {
+        Map<Integer, Integer> limitesTemporales = new LinkedHashMap<>();
+        for (Cuarteta c : candidatos) {
+            if (c instanceof Asignacion3D asignacion
+                    && asignacion.getResult() instanceof TemporalAccess temporal
+                    && asignacion.getOperand1() instanceof Literal3D literal) {
+                Integer limite = limiteMalloc(literal.getTexto());
+                if (limite != null) limitesTemporales.put(temporal.getNumero(), limite);
+            }
+        }
+        for (Cuarteta c : candidatos) {
+            if (c instanceof DeclararArreglo3D arreglo && buscado.equals(arreglo.getNombre())) {
+                String dims = arreglo.getDims();
+                if (dims == null) return -1;
+                String primero = dims.split(",")[0].trim();
+                try {
+                    return Integer.parseInt(primero);
+                } catch (NumberFormatException ignored) {
+                    return -1;
+                }
+            }
+            if (c instanceof Asignacion3D asignacion
+                    && asignacion.getResult() instanceof NameAccess na
+                    && buscado.equals(na.getNombre())
+                    && asignacion.getOperand1() instanceof TemporalAccess temporal) {
+                Integer limite = limitesTemporales.get(temporal.getNumero());
+                if (limite != null) return limite;
+            }
+        }
+        return -1;
+    }
+
+    private Integer limiteMalloc(String texto) {
+        if (texto == null || !texto.startsWith("malloc(")) return null;
+        String cuenta = texto.substring("malloc(".length(), texto.length() - 1)
+                .split("\\s*\\*")[0].trim();
+        try {
+            return Integer.parseInt(cuenta);
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
+    }
+
+    private NameAccess primerNombre(MemoryAccess op) {
+        if (op instanceof NameAccess na && !na.isAutoreferencia()) return na;
+        if (op instanceof cunoc.compi2.alien_code.c3d.access.CampoAccess ca) {
+            return primerNombre(ca.getBase());
+        }
+        if (op instanceof cunoc.compi2.alien_code.c3d.access.IndiceAccess ia) {
+            NameAccess base = primerNombre(ia.getBase());
+            return base != null ? base : primerNombre(ia.getIndice());
         }
         return null;
     }

@@ -61,6 +61,21 @@ public final class EmisorAritmetica {
     private void binaria(String simbolo, Operacion3D op) {
         MemoryAccess a = op.getOperand1();
         MemoryAccess b = op.getOperand2();
+        boolean cadenas = a != null && b != null
+                && (a.getTipo() == cunoc.compi2.alien_code.ast.Type.STRING
+                || b.getTipo() == cunoc.compi2.alien_code.ast.Type.STRING
+                || a.getTipo() == cunoc.compi2.alien_code.ast.Type.NULL
+                || b.getTipo() == cunoc.compi2.alien_code.ast.Type.NULL);
+        if (cadenas && ("==".equals(simbolo) || "!=".equals(simbolo))) {
+            memoria.cargarEntero(a, "a0");
+            memoria.cargarEntero(b, "a1");
+            ctx.emitir("    jal ra, rt_str_eq");
+            if ("!=".equals(simbolo)) {
+                ctx.emitir("    xori a0, a0, 1");
+            }
+            guardar(op.getResult(), false, "a0", null);
+            return;
+        }
         boolean doble = ctx.getTipoRV(a) == TipoRV.DOBLE || ctx.getTipoRV(b) == TipoRV.DOBLE;
         if (doble) {
             memoria.cargarDouble(a, "ft0");
@@ -69,10 +84,17 @@ public final class EmisorAritmetica {
                 case "+" -> { ctx.emitir("    fadd.d ft0, ft0, ft1"); guardar(op.getResult(), true, null, "ft0"); }
                 case "-" -> { ctx.emitir("    fsub.d ft0, ft0, ft1"); guardar(op.getResult(), true, null, "ft0"); }
                 case "*" -> { ctx.emitir("    fmul.d ft0, ft0, ft1"); guardar(op.getResult(), true, null, "ft0"); }
-                case "/" -> { ctx.emitir("    fdiv.d ft0, ft0, ft1"); guardar(op.getResult(), true, null, "ft0"); }
+                case "/" -> {
+                    ctx.emitir("    fcvt.d.w ft2, zero");
+                    ctx.emitir("    feq.d t6, ft1, ft2");
+                    ctx.emitir("    bnez t6, rt_error_division");
+                    ctx.emitir("    fdiv.d ft0, ft0, ft1");
+                    guardar(op.getResult(), true, null, "ft0");
+                }
                 case "%" -> {
                     ctx.emitir("    fcvt.w.d t0, ft0, rtz");
                     ctx.emitir("    fcvt.w.d t1, ft1, rtz");
+                    ctx.emitir("    beqz t1, rt_error_division");
                     ctx.emitir("    rem t0, t0, t1");
                     guardar(op.getResult(), false, "t0", null);
                 }
@@ -105,8 +127,16 @@ public final class EmisorAritmetica {
             case "+" -> { ctx.emitir("    add t2, t0, t1"); guardar(op.getResult(), false, "t2", null); }
             case "-" -> { ctx.emitir("    sub t2, t0, t1"); guardar(op.getResult(), false, "t2", null); }
             case "*" -> { ctx.emitir("    mul t2, t0, t1"); guardar(op.getResult(), false, "t2", null); }
-            case "/" -> { ctx.emitir("    div t2, t0, t1"); guardar(op.getResult(), false, "t2", null); }
-            case "%" -> { ctx.emitir("    rem t2, t0, t1"); guardar(op.getResult(), false, "t2", null); }
+            case "/" -> {
+                ctx.emitir("    beqz t1, rt_error_division");
+                ctx.emitir("    div t2, t0, t1");
+                guardar(op.getResult(), false, "t2", null);
+            }
+            case "%" -> {
+                ctx.emitir("    beqz t1, rt_error_division");
+                ctx.emitir("    rem t2, t0, t1");
+                guardar(op.getResult(), false, "t2", null);
+            }
             case "<" -> { ctx.emitir("    slt t2, t0, t1"); guardar(op.getResult(), false, "t2", null); }
             case ">" -> { ctx.emitir("    slt t2, t1, t0"); guardar(op.getResult(), false, "t2", null); }
             case "<=" -> {

@@ -141,7 +141,8 @@ public class VariableDeclNode extends Sentencia {
             }
         } else if (inicial != null) {
             Type tipoInicial = ctx.evaluar(inicial);
-            if (tipoInicial == Type.NULL && tipo != Type.CLASS && tipo != Type.STRUCT) {
+            if (tipoInicial == Type.NULL && tipo != Type.CLASS && tipo != Type.STRUCT
+                    && tipo != Type.STRING) {
                 ctx.registrarError(getLine(), getColumn(),
                     "null no puede asignarse a '" + nombreTipoLegible() + "'");
             } else if (!TypeCompat.esAsignable(tipo, tipoInicial)) {

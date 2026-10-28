@@ -24,7 +24,7 @@ Se requiere un entorno gráfico para utilizar la interfaz. Los archivos de códi
 
 ## 3. Organización del proyecto
 
-El directorio `3DAlien` contiene la aplicación y esta documentación; `pruebas` se encuentra en su directorio padre.
+El directorio `3DAlien` contiene la aplicación y esta documentación.
 
 ```text
 3DAlien/
@@ -49,12 +49,8 @@ El directorio `3DAlien` contiene la aplicación y esta documentación; `pruebas`
         │   ├── ui/                  Interfaz gráfica
         │   ├── ylang/astbuilder/    Constructor del AST de Y?
         │   ├── zetariano/astbuilder/ Constructor del AST de Zetariano
-        │   ├── runner/              Integración con RARS y runtime
+        │   ├── runner/              Integración con RARS y runtime embebido
         │   └── Alien_code.java      Punto de entrada
-        └── resources/riscv/runtime.s
-pruebas/
-├── fase1/
-└── fase2/
 ```
 
 El directorio `Alien_code/target` se crea durante la compilación. Contiene clases, fuentes generadas por ANTLR y el JAR; no es el lugar para editar el código fuente del proyecto.
@@ -100,7 +96,8 @@ Archivo .pig activo e importaciones directas .y/.z
 | Y? | `.y` | Permite definir funciones y estructuras reutilizables. |
 | Zetariano | `.z` | Permite definir clases y operaciones orientadas a objetos. |
 
-Un ejemplo de programa principal existente es [`Control.pig`](../pruebas/fase2/04_control/Control.pig):
+Un programa principal debe tener extensión `.pig` y contener las secciones
+`MAIOR>` y `FINIS;`. Sus imports se resuelven desde la carpeta del programa:
 
 ```text
 import control.Control.z
@@ -192,7 +189,7 @@ El heap reservado por el generador es de 3 145 728 bytes y el área `Str_libre` 
 
 ### 10.3 Runtime y ejecución
 
-`src/main/resources/riscv/runtime.s` contiene rutinas auxiliares utilizadas por el código generado. `RuntimeRiscV` lo carga como recurso del classpath. Al presionar **Ejecutar en RARS**, `PanelCodigoRISCV` concatena el código del panel con el runtime y guarda el resultado en `build/programa.s` de la carpeta del proyecto. El botón **Guardar .s**, en cambio, guarda el texto mostrado en el panel; para ejecutar ese archivo por separado puede ser necesario agregarle el runtime.
+`RuntimeRiscV` contiene las rutinas auxiliares RISC-V como una constante Java. Al presionar **Ejecutar en RARS**, `PanelCodigoRISCV` concatena el código del panel con el runtime y guarda el resultado en `build/programa.s` de la carpeta del proyecto. El botón **Guardar .s**, en cambio, guarda el texto mostrado en el panel; para ejecutar ese archivo por separado puede ser necesario agregarle el runtime.
 
 `RarsRunner` ensambla y ejecuta el texto mediante la API de RARS. Normaliza los saltos CRLF y elimina un BOM inicial si existe. La ejecución utiliza un límite de 30 000 000 de instrucciones por defecto y devuelve uno de los estados `OK`, `ERROR_ENSAMBLADO`, `ERROR_EJECUCION` o `LIMITE_PASOS`. La interfaz ejecuta la simulación en un hilo separado y muestra la salida y el estado en el log.
 
@@ -230,7 +227,7 @@ El ciclo genera los analizadores de ANTLR, compila las clases Java y construye:
 target/Alien_code-1.0-SNAPSHOT.jar
 ```
 
-El proyecto utiliza `maven-antrun-plugin` durante `process-classes` para incorporar las clases y recursos del `libs/rars.jar` local. `maven-shade-plugin` empaqueta las dependencias Maven y establece `cunoc.compi2.alien_code.Alien_code` como clase principal del manifiesto. El runtime se incorpora como recurso de la aplicación.
+El proyecto utiliza `maven-antrun-plugin` durante `process-classes` para incorporar las clases y recursos del `libs/rars.jar` local. `maven-shade-plugin` empaqueta las dependencias Maven y establece `cunoc.compi2.alien_code.Alien_code` como clase principal del manifiesto. El runtime forma parte de `RuntimeRiscV`.
 
 Para iniciar el resultado:
 
@@ -240,28 +237,7 @@ java -jar target/Alien_code-1.0-SNAPSHOT.jar
 
 También puede abrirse mediante doble clic cuando el sistema tenga configurada la asociación de archivos `.jar` con una versión compatible de Java. Maven puede advertir que RARS utiliza una dependencia `system` con una ruta dentro del proyecto; el archivo `libs/rars.jar` debe mantenerse disponible al construir.
 
-## 13. Pruebas y validación
-
-Las carpetas de `pruebas/fase2` son programas independientes. Para una revisión manual, se abre la carpeta correspondiente, se selecciona su `.pig`, se compila y se consultan los reportes y el código generado.
-
-| Carpeta | Aspectos principales |
-|---|---|
-| `01_tictactoe` | Tablero, arreglos bidimensionales, herencia, sobrescritura y polimorfismo. |
-| `02_vida` | Juego de la Vida, arreglos bidimensionales y ciclos. |
-| `03_banco` | Clases y funciones importadas en un escenario bancario. |
-| `03_estructuras` | Pila, cola, referencias, herencia y estructuras enlazadas. |
-| `04_control` | Condicionales, `switch`, ciclos, operadores y control de flujo. |
-| `05_errores` | Casos negativos de semántica; las expectativas están en `ERRORES_ESPERADOS.txt`. |
-| `06_laberinto` | Interacción de clases, tablero y lógica de un laberinto. |
-| `7_Arena` | Caso integrado con clases, funciones y control de flujo. |
-
-Algunas carpetas incluyen `SALIDA_ESPERADA.txt`; no todas lo incluyen. Estos archivos son referencias de los casos, pero una ejecución debe contrastarse con el comportamiento real y con los datos de entrada disponibles. Para revisar una modificación del backend RISC-V, se recomienda guardar el ensamblador anterior, generar uno nuevo con los mismos fuentes y comparar ambos, además de ejecutar casos representativos.
-
-En las verificaciones realizadas después de la unificación de cargas, los ensambladores de TicTacToe, GameOfLife, Banco, Estructuras, Control, Laberinto y Arena fueron idénticos a sus respectivas versiones anteriores. Arena alcanzó el límite de pasos durante esa ejecución. En TicTacToe, la segunda partida terminó en siete turnos, mientras que el archivo de salida esperada describe nueve; el ensamblador coincidía con el anterior al cambio. Los resultados de ejecución de GameOfLife, Estructuras y Control coincidieron con sus referencias al ignorar diferencias de saltos de línea.
-
-El ciclo `mvn clean package` compila el proyecto, pero no sustituye estas pruebas funcionales; en la configuración observada no hay pruebas Java automatizadas que se ejecuten durante ese ciclo.
-
-## 14. Diagnóstico y mantenimiento
+## 13. Diagnóstico y mantenimiento
 
 | Situación | Revisión recomendada |
 |---|---|

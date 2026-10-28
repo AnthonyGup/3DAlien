@@ -43,7 +43,7 @@ La compilación necesita el archivo local `Alien_code/libs/rars.jar` y acceso a 
 
 ## Uso básico
 
-1. Selecciona **Archivo > Abrir carpeta de proyecto** y abre la carpeta del programa. Por ejemplo, `pruebas/fase2/04_control`.
+1. Selecciona **Archivo > Abrir carpeta de proyecto** y abre la carpeta del programa.
 2. Abre el archivo `.pig` principal desde el árbol y guarda los cambios del editor.
 3. Con el `.pig` seleccionado, presiona **Compilar main (.pig)**.
 4. Consulta el log y el menú **Reportes** para revisar errores, símbolos, cuartetas y código generado.
@@ -62,16 +62,11 @@ La opción de ejecución RARS de la interfaz entrega una entrada vacía al progr
     ├── pom.xml
     ├── libs/rars.jar
     ├── src/main/antlr4/       Gramáticas ANTLR
-    ├── src/main/java/         Compilador e interfaz
-    ├── src/main/resources/    Runtime RISC-V
+    ├── src/main/java/         Compilador, interfaz y runtime RISC-V
     └── target/                Archivos generados por Maven
-pruebas/
-├── fase1/
-└── fase2/
 ```
 
-El directorio `pruebas` es hermano de `3DAlien` en la distribución del proyecto. Cada carpeta de `pruebas/fase2` contiene un caso independiente con sus archivos fuente e importaciones.
+## Documentación
 
-## Documentación y pruebas
-
-El [manual técnico](MANUAL_TECNICO.md) describe la arquitectura, el proceso de compilación, la generación de código, las pruebas y las limitaciones conocidas. Los ejemplos están disponibles en [`pruebas/fase2`](../pruebas/fase2/).
+El [manual técnico](Alien_code/docs/MANUAL_TECNICO.md) describe la arquitectura,
+el proceso de compilación, la generación de código y las limitaciones conocidas.
