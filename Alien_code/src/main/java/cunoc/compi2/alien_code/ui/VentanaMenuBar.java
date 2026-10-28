@@ -14,9 +14,12 @@ public class VentanaMenuBar extends JMenuBar {
     private final JButton botonCompilarMain;
     private final JButton botonLimpiarLog;
     private final JButton botonGuardarCambios;
+    private final JMenu menuArchivo;
+    private final JMenu menuReportes;
+    private final JMenu menuAyuda;
 
     public VentanaMenuBar() {
-        JMenu menuArchivo = new JMenu("Archivo");
+        menuArchivo = new JMenu("Archivo");
         menuArchivo.add(item("Nuevo archivo"));
         menuArchivo.add(item("Abrir carpeta de proyecto"));
         menuArchivo.addSeparator();
@@ -29,15 +32,14 @@ public class VentanaMenuBar extends JMenuBar {
         botonGuardarCambios.setToolTipText("Guardar cambios del archivo abierto");
         add(botonGuardarCambios);
 
-        JMenu menuReportes = new JMenu("Reportes");
+        menuReportes = new JMenu("Reportes");
         menuReportes.add(item("Ver errores"));
         menuReportes.add(item("Ver tabla de s\u00edmbolos"));
         menuReportes.add(item("Ver cuartetas"));
         menuReportes.add(item("Ver c\u00f3digo C generado"));
-        menuReportes.add(item("Ver c\u00f3digo RISC-V generado"));
         add(menuReportes);
 
-        JMenu menuAyuda = new JMenu("Ayuda");
+        menuAyuda = new JMenu("Ayuda");
         menuAyuda.add(item("Acerca de"));
         add(menuAyuda);
 
@@ -81,23 +83,19 @@ public class VentanaMenuBar extends JMenuBar {
     public void setOnVerSimbolos(ActionListener l) { anclarReportes(1, l); }
     public void setOnVerCuartetas(ActionListener l) { anclarReportes(2, l); }
     public void setOnVerCodigoC(ActionListener l) { anclarReportes(3, l); }
-    public void setOnVerCodigoRISCV(ActionListener l) { anclarReportes(4, l); }
     public void setOnAcercaDe(ActionListener l) { anclarAyuda(0, l); }
     public void setOnCompilarMain(ActionListener l) { botonCompilarMain.addActionListener(l); }
     public void setOnLimpiarLog(ActionListener l) { botonLimpiarLog.addActionListener(l); }
 
     private void anclar(int indice, ActionListener l) {
-        JMenu menu = (JMenu) getComponent(0);
-        ((JMenuItem) menu.getMenuComponent(indice)).addActionListener(l);
+        ((JMenuItem) menuArchivo.getMenuComponent(indice)).addActionListener(l);
     }
 
     private void anclarReportes(int indice, ActionListener l) {
-        JMenu menu = (JMenu) getComponent(1);
-        ((JMenuItem) menu.getMenuComponent(indice)).addActionListener(l);
+        ((JMenuItem) menuReportes.getMenuComponent(indice)).addActionListener(l);
     }
 
     private void anclarAyuda(int indice, ActionListener l) {
-        JMenu menu = (JMenu) getComponent(2);
-        ((JMenuItem) menu.getMenuComponent(indice)).addActionListener(l);
+        ((JMenuItem) menuAyuda.getMenuComponent(indice)).addActionListener(l);
     }
 }

@@ -83,7 +83,6 @@ public class VentanaPrincipal extends JFrame {
         menuBar.setOnVerSimbolos(e -> ventanaSimbolos.setVisible(true));
         menuBar.setOnVerCuartetas(e -> ventanaCuartetas.setVisible(true));
         menuBar.setOnVerCodigoC(e -> verCodigoC(log));
-        menuBar.setOnVerCodigoRISCV(e -> verCodigoRISCV(log));
         menuBar.setOnAcercaDe(e -> acercaDe());
     }
 
@@ -457,15 +456,6 @@ public class VentanaPrincipal extends JFrame {
         }
         VentanaCodigoC ventana = new VentanaCodigoC(this, "Código C generado", codigoCActual, log, carpetaProyecto);
         ventana.setVisible(true);
-    }
-
-    private void verCodigoRISCV(PanelLog log) {
-        if (codigoRiscVActual == null) {
-            log.agregarPendiente("Compila un archivo primero para generar código RISC-V.");
-            return;
-        }
-        panelRiscV.setContenido(codigoRiscVActual);
-        mainPanel.mostrarPestanaRiscV();
     }
 
     private void acercaDe() {

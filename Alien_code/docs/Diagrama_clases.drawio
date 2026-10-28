@@ -19,14 +19,11 @@
         <mxCell id="ventana" value="&lt;b&gt;VentanaPrincipal&lt;/b&gt;" style="html=1;whiteSpace=wrap;align=left;verticalAlign=top;spacingLeft=4;fillColor=none;strokeColor=#000000;fontColor=#000000;" vertex="1" parent="1">
           <mxGeometry x="1000" y="170" width="170" height="40" as="geometry"/>
         </mxCell>
-        <mxCell id="panel" value="&lt;b&gt;PanelCodigoRISCV&lt;/b&gt;&lt;hr&gt;guardar()&lt;br&gt;ejecutar()" style="html=1;whiteSpace=wrap;align=left;verticalAlign=top;spacingLeft=4;fillColor=none;strokeColor=#000000;fontColor=#000000;" vertex="1" parent="1">
-          <mxGeometry x="1000" y="330" width="170" height="60" as="geometry"/>
+        <mxCell id="panel" value="&lt;b&gt;PanelCodigoRISCV&lt;/b&gt;&lt;hr&gt;setContenido(...)&lt;br&gt;guardar()&lt;br&gt;ejecutarEnRARS()&lt;br&gt;setAlEjecutar(...)" style="html=1;whiteSpace=wrap;align=left;verticalAlign=top;spacingLeft=4;fillColor=none;strokeColor=#000000;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="1000" y="330" width="190" height="85" as="geometry"/>
         </mxCell>
-        <mxCell id="runtime" value="&lt;b&gt;RuntimeRiscV&lt;/b&gt;&lt;hr&gt;texto(): String" style="html=1;whiteSpace=wrap;align=left;verticalAlign=top;spacingLeft=4;fillColor=none;strokeColor=#000000;fontColor=#000000;" vertex="1" parent="1">
-          <mxGeometry x="1000" y="480" width="150" height="55" as="geometry"/>
-        </mxCell>
-        <mxCell id="rars" value="&lt;b&gt;RarsRunner&lt;/b&gt;&lt;hr&gt;ejecutar(asm, entrada)" style="html=1;whiteSpace=wrap;align=left;verticalAlign=top;spacingLeft=4;fillColor=none;strokeColor=#000000;fontColor=#000000;" vertex="1" parent="1">
-          <mxGeometry x="1200" y="480" width="170" height="55" as="geometry"/>
+        <mxCell id="rars" value="&lt;b&gt;RarsRunner&lt;/b&gt;&lt;hr&gt;ejecutar(asm, entrada)&lt;br&gt;ejecutar(asm, entrada, maxPasos)&lt;br&gt;Resultado / Estado" style="html=1;whiteSpace=wrap;align=left;verticalAlign=top;spacingLeft=4;fillColor=none;strokeColor=#000000;fontColor=#000000;" vertex="1" parent="1">
+          <mxGeometry x="1200" y="480" width="190" height="70" as="geometry"/>
         </mxCell>
         <mxCell id="rarsext" value="RARS (biblioteca externa)" style="html=1;whiteSpace=wrap;dashed=1;fillColor=none;strokeColor=#000000;fontColor=#000000;" vertex="1" parent="1">
           <mxGeometry x="1200" y="620" width="170" height="40" as="geometry"/>
@@ -36,7 +33,7 @@
         <mxCell id="gen" value="&lt;b&gt;RiscVCodeGenerator&lt;/b&gt;&lt;hr&gt;errores: List&lt;hr&gt;generate(...): String&lt;br&gt;errores()" style="html=1;whiteSpace=wrap;align=left;verticalAlign=top;spacingLeft=4;fillColor=none;strokeColor=#000000;fontColor=#000000;" vertex="1" parent="1">
           <mxGeometry x="300" y="170" width="200" height="90" as="geometry"/>
         </mxCell>
-        <mxCell id="ctx" value="&lt;b&gt;ContextoRiscV&lt;/b&gt;&lt;hr&gt;layouts: LayoutsRiscV&lt;br&gt;marco: MarcoRiscV&lt;br&gt;datos, codigo, errores&lt;hr&gt;emitir(...)&lt;br&gt;error(...)&lt;br&gt;layoutsRiscV()" style="html=1;whiteSpace=wrap;align=left;verticalAlign=top;spacingLeft=4;fillColor=none;strokeColor=#000000;fontColor=#000000;" vertex="1" parent="1">
+        <mxCell id="ctx" value="&lt;b&gt;ContextoRiscV&lt;/b&gt;&lt;hr&gt;layoutsRiscV: LayoutsRiscV&lt;br&gt;marcoActual: MarcoRiscV&lt;br&gt;datos, texto, errores&lt;hr&gt;emitir(...)&lt;br&gt;error(...)&lt;br&gt;layoutsRiscV()" style="html=1;whiteSpace=wrap;align=left;verticalAlign=top;spacingLeft=4;fillColor=none;strokeColor=#000000;fontColor=#000000;" vertex="1" parent="1">
           <mxGeometry x="20" y="330" width="220" height="120" as="geometry"/>
         </mxCell>
         <mxCell id="marco" value="&lt;b&gt;MarcoRiscV&lt;/b&gt;&lt;hr&gt;nombre&lt;br&gt;maxSlot&lt;hr&gt;desde(...)&lt;br&gt;agregarParam(...)&lt;br&gt;tamano(): int" style="html=1;whiteSpace=wrap;align=left;verticalAlign=top;spacingLeft=4;fillColor=none;strokeColor=#000000;fontColor=#000000;" vertex="1" parent="1">
@@ -54,7 +51,7 @@
         <mxCell id="layouts" value="&lt;b&gt;LayoutsRiscV&lt;/b&gt;&lt;hr&gt;layouts: ClaseLayouts&lt;hr&gt;esClase(tipo)&lt;br&gt;slots(tipo)&lt;br&gt;offsetCampo(...)&lt;br&gt;tipoCampo(...): TipoRV" style="html=1;whiteSpace=wrap;align=left;verticalAlign=top;spacingLeft=4;fillColor=none;strokeColor=#000000;fontColor=#000000;" vertex="1" parent="1">
           <mxGeometry x="20" y="500" width="220" height="110" as="geometry"/>
         </mxCell>
-        <mxCell id="param" value="&lt;b&gt;Param&lt;/b&gt;&lt;hr&gt;nombre&lt;br&gt;tipo: TipoRV&lt;br&gt;slot" style="html=1;whiteSpace=wrap;align=left;verticalAlign=top;spacingLeft=4;fillColor=none;strokeColor=#000000;fontColor=#000000;" vertex="1" parent="1">
+        <mxCell id="param" value="&lt;b&gt;MarcoRiscV.Param&lt;/b&gt;&lt;hr&gt;nombre&lt;br&gt;tipo: TipoRV&lt;br&gt;slot" style="html=1;whiteSpace=wrap;align=left;verticalAlign=top;spacingLeft=4;fillColor=none;strokeColor=#000000;fontColor=#000000;" vertex="1" parent="1">
           <mxGeometry x="300" y="500" width="180" height="70" as="geometry"/>
         </mxCell>
         <mxCell id="tiporv" value="&lt;b&gt;«enum» TipoRV&lt;/b&gt;&lt;hr&gt;ENTERO, REF, CHAR,&lt;br&gt;BOOL, DOBLE" style="html=1;whiteSpace=wrap;align=left;verticalAlign=top;spacingLeft=4;fillColor=none;strokeColor=#000000;fontColor=#000000;" vertex="1" parent="1">
@@ -90,7 +87,6 @@
         <!-- Relaciones: UI -->
         <mxCell id="r1" style="endArrow=open;endFill=0;html=1;strokeColor=#000000;" edge="1" parent="1" source="ventana" target="panel"><mxGeometry relative="1" as="geometry"/></mxCell>
         <mxCell id="r2" style="endArrow=open;endFill=0;dashed=1;html=1;strokeColor=#000000;" edge="1" parent="1" source="ventana" target="gen"><mxGeometry relative="1" as="geometry"/></mxCell>
-        <mxCell id="r3" style="endArrow=open;endFill=0;dashed=1;html=1;strokeColor=#000000;" edge="1" parent="1" source="panel" target="runtime"><mxGeometry relative="1" as="geometry"/></mxCell>
         <mxCell id="r4" style="endArrow=open;endFill=0;dashed=1;html=1;strokeColor=#000000;" edge="1" parent="1" source="panel" target="rars"><mxGeometry relative="1" as="geometry"/></mxCell>
         <mxCell id="r5" style="endArrow=open;endFill=0;dashed=1;html=1;strokeColor=#000000;" edge="1" parent="1" source="rars" target="rarsext"><mxGeometry relative="1" as="geometry"/></mxCell>
 
