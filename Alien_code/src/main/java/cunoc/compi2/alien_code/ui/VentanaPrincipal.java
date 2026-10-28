@@ -75,6 +75,7 @@ public class VentanaPrincipal extends JFrame {
         menuBar.setOnNuevoArchivo(e -> crearNuevoArchivo(arbol));
         menuBar.setOnAbrirCarpeta(e -> abrirCarpetaProyecto());
         menuBar.setOnGuardar(e -> guardar(tabs));
+        menuBar.setOnGuardarCambios(e -> guardar(tabs));
         menuBar.setOnSalir(e -> dispose());
         menuBar.setOnCompilarMain(e -> compilarMainPig(log));
         menuBar.setOnLimpiarLog(e -> log.limpiar());

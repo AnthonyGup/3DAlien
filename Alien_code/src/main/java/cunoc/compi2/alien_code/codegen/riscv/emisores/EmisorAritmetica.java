@@ -87,14 +87,14 @@ public final class EmisorAritmetica {
                 case "/" -> {
                     ctx.emitir("    fcvt.d.w ft2, zero");
                     ctx.emitir("    feq.d t6, ft1, ft2");
-                    ctx.emitir("    bnez t6, rt_error_division");
+                    ctx.emitirErrorSiNoCero("t6", "rt_error_division");
                     ctx.emitir("    fdiv.d ft0, ft0, ft1");
                     guardar(op.getResult(), true, null, "ft0");
                 }
                 case "%" -> {
                     ctx.emitir("    fcvt.w.d t0, ft0, rtz");
                     ctx.emitir("    fcvt.w.d t1, ft1, rtz");
-                    ctx.emitir("    beqz t1, rt_error_division");
+                    ctx.emitirErrorSiCero("t1", "rt_error_division");
                     ctx.emitir("    rem t0, t0, t1");
                     guardar(op.getResult(), false, "t0", null);
                 }
@@ -128,12 +128,12 @@ public final class EmisorAritmetica {
             case "-" -> { ctx.emitir("    sub t2, t0, t1"); guardar(op.getResult(), false, "t2", null); }
             case "*" -> { ctx.emitir("    mul t2, t0, t1"); guardar(op.getResult(), false, "t2", null); }
             case "/" -> {
-                ctx.emitir("    beqz t1, rt_error_division");
+                ctx.emitirErrorSiCero("t1", "rt_error_division");
                 ctx.emitir("    div t2, t0, t1");
                 guardar(op.getResult(), false, "t2", null);
             }
             case "%" -> {
-                ctx.emitir("    beqz t1, rt_error_division");
+                ctx.emitirErrorSiCero("t1", "rt_error_division");
                 ctx.emitir("    rem t2, t0, t1");
                 guardar(op.getResult(), false, "t2", null);
             }

@@ -38,6 +38,9 @@ public final class EmisorES {
             indice++;
             imprimirOperando(op, esp);
         }
+        ctx.emitir("    li a0, 10");
+        ctx.emitir("    li a7, 11");
+        ctx.emitir("    ecall");
     }
 
     private void imprimirOperando(MemoryAccess op, String esp) {

@@ -549,9 +549,9 @@ public final class EmisorMemoria {
             cargarEntero(ia.getIndice(), POOL[depth + 1], depth + 1);
             int limite = ctx.limiteArreglo(ia.getBase());
             if (limite > 0) {
-                ctx.emitir("    bltz " + ir + ", rt_error_indice");
+                ctx.emitirErrorSiNegativo(ir, "rt_error_indice");
                 ctx.emitir("    li t6, " + limite);
-                ctx.emitir("    bge " + ir + ", t6, rt_error_indice");
+                ctx.emitirErrorSiMayorOIgual(ir, "t6", "rt_error_indice");
             }
             ctx.emitir("    slli " + ir + ", " + ir + ", 3");
             ctx.emitir("    add " + r + ", " + r + ", " + ir);

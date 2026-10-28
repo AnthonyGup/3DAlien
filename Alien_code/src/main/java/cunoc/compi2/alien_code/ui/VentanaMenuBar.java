@@ -13,6 +13,7 @@ public class VentanaMenuBar extends JMenuBar {
 
     private final JButton botonCompilarMain;
     private final JButton botonLimpiarLog;
+    private final JButton botonGuardarCambios;
 
     public VentanaMenuBar() {
         JMenu menuArchivo = new JMenu("Archivo");
@@ -24,7 +25,11 @@ public class VentanaMenuBar extends JMenuBar {
         menuArchivo.add(item("Salir"));
         add(menuArchivo);
 
-JMenu menuReportes = new JMenu("Reportes");
+        botonGuardarCambios = crearBoton("Guardar cambios");
+        botonGuardarCambios.setToolTipText("Guardar cambios del archivo abierto");
+        add(botonGuardarCambios);
+
+        JMenu menuReportes = new JMenu("Reportes");
         menuReportes.add(item("Ver errores"));
         menuReportes.add(item("Ver tabla de s\u00edmbolos"));
         menuReportes.add(item("Ver cuartetas"));
@@ -70,6 +75,7 @@ JMenu menuReportes = new JMenu("Reportes");
     public void setOnNuevoArchivo(ActionListener l) { anclar(0, l); }
     public void setOnAbrirCarpeta(ActionListener l) { anclar(1, l); }
     public void setOnGuardar(ActionListener l) { anclar(3, l); }
+    public void setOnGuardarCambios(ActionListener l) { botonGuardarCambios.addActionListener(l); }
     public void setOnSalir(ActionListener l) { anclar(5, l); }
     public void setOnVerErrores(ActionListener l) { anclarReportes(0, l); }
     public void setOnVerSimbolos(ActionListener l) { anclarReportes(1, l); }

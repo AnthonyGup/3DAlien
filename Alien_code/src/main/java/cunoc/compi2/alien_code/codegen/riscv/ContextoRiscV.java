@@ -58,6 +58,7 @@ public final class ContextoRiscV {
     private int nextConstLabel = 0;
     private int nextFmtLabel = 0;
     private int nextVirtualSite = 0;
+    private int nextErrorBranch = 0;
 
     public ContextoRiscV(List<Cuarteta> todas, SymbolTable tabla, Map<Integer, String> tiposTemporales,
             ClaseLayouts layouts) {
@@ -162,6 +163,34 @@ public final class ContextoRiscV {
     public void emitir(String linea) { texto.append(linea).append('\n'); }
     public void emitirDato(String linea) { datos.append(linea).append('\n'); }
     public void error(String mensaje) { errores.add(mensaje); }
+
+    public void emitirErrorSiCero(String registro, String rutina) {
+        String continuar = "L_error_branch_" + nextErrorBranch++;
+        emitir("    bnez " + registro + ", " + continuar);
+        emitir("    jal ra, " + rutina);
+        emitir(continuar + ":");
+    }
+
+    public void emitirErrorSiNoCero(String registro, String rutina) {
+        String continuar = "L_error_branch_" + nextErrorBranch++;
+        emitir("    beqz " + registro + ", " + continuar);
+        emitir("    jal ra, " + rutina);
+        emitir(continuar + ":");
+    }
+
+    public void emitirErrorSiNegativo(String registro, String rutina) {
+        String continuar = "L_error_branch_" + nextErrorBranch++;
+        emitir("    bgez " + registro + ", " + continuar);
+        emitir("    jal ra, " + rutina);
+        emitir(continuar + ":");
+    }
+
+    public void emitirErrorSiMayorOIgual(String izquierda, String limite, String rutina) {
+        String continuar = "L_error_branch_" + nextErrorBranch++;
+        emitir("    blt " + izquierda + ", " + limite + ", " + continuar);
+        emitir("    jal ra, " + rutina);
+        emitir(continuar + ":");
+    }
 
     public void setTipoRV(MemoryAccess op, TipoRV t) { tipoRV.put(op, t); }
     public TipoRV getTipoRV(MemoryAccess op) {
