@@ -1,7 +1,6 @@
 package cunoc.compi2.alien_code.ui;
 
 import cunoc.compi2.alien_code.runner.RarsRunner;
-import cunoc.compi2.alien_code.runner.RuntimeRiscV;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
@@ -161,7 +160,7 @@ public class PanelCodigoRISCV extends JPanel {
 
         File sFile = new File(baseDir, "programa.s");
         try {
-            String ejecutable = area.getText() + "\n" + RuntimeRiscV.texto();
+            String ejecutable = area.getText();
             Files.writeString(sFile.toPath(), ejecutable, StandardCharsets.UTF_8);
             log.agregarInfo("> Código RISC-V (programa + runtime) guardado en: "
                     + sFile.getAbsolutePath());

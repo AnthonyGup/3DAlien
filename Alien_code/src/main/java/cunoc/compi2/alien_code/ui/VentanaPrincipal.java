@@ -153,10 +153,8 @@ public class VentanaPrincipal extends JFrame {
             return;
         }
 
-        // Siempre sincronizar carpeta de proyecto con el archivo actual (como el harness)
-        File nuevaCarpeta = archivo.getParentFile();
-        if (carpetaProyecto == null || !carpetaProyecto.equals(nuevaCarpeta)) {
-            carpetaProyecto = nuevaCarpeta;
+        if (carpetaProyecto == null) {
+            carpetaProyecto = archivo.getParentFile();
             mainPanel.getArbolProyecto().setRaizProyecto(carpetaProyecto);
             mainPanel.getPanelLog().agregar("Proyecto sincronizado: " + carpetaProyecto.getAbsolutePath());
         }
@@ -244,7 +242,7 @@ public class VentanaPrincipal extends JFrame {
         }
 
         for (ImportNode importacion : importsDe(programa)) {
-            File archivoImportado = resolverImport(importacion.rutaCompleta);
+            File archivoImportado = resolverImport(archivo.getParentFile(), importacion.rutaCompleta);
             if (archivoImportado == null) {
                 filasErrores.add(new Object[]{"Semántico",
                     "No se encontró el archivo importado '" + importacion.rutaCompleta + "'.",
@@ -407,8 +405,8 @@ public class VentanaPrincipal extends JFrame {
         return imports;
     }
 
-    private File resolverImport(String rutaCompleta) {
-        if (carpetaProyecto == null) return null;
+    private File resolverImport(File baseImportacion, String rutaCompleta) {
+        if (baseImportacion == null || rutaCompleta == null) return null;
         String[] partes = rutaCompleta.split("\\.");
         if (partes.length < 2) return null;
         String ext = partes[partes.length - 1];
@@ -417,7 +415,7 @@ public class VentanaPrincipal extends JFrame {
             if (i > 0) path.append(File.separatorChar);
             path.append(partes[i]);
         }
-        File archivo = new File(carpetaProyecto, path.toString() + "." + ext);
+        File archivo = new File(baseImportacion, path.toString() + "." + ext);
         if (archivo.isFile()) return archivo;
         return null;
     }

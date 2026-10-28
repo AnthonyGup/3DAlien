@@ -49,44 +49,93 @@ El directorio `3DAlien` contiene la aplicación y esta documentación.
         │   ├── ui/                  Interfaz gráfica
         │   ├── ylang/astbuilder/    Constructor del AST de Y?
         │   ├── zetariano/astbuilder/ Constructor del AST de Zetariano
-        │   ├── runner/              Integración con RARS y runtime embebido
+        │   ├── runner/              Integración con RARS
         │   └── Alien_code.java      Punto de entrada
 ```
 
 El directorio `Alien_code/target` se crea durante la compilación. Contiene clases, fuentes generadas por ANTLR y el JAR; no es el lugar para editar el código fuente del proyecto.
 
-## 4. Arquitectura general
+## 4. Arquitectura general y diagrama de clases
 
 El flujo principal es el siguiente:
 
 ```text
-Archivo .pig activo e importaciones directas .y/.z
-                       |
-                       v
-          Analizadores ANTLR por lenguaje
-                       |
-                       v
-        Constructores de AST por lenguaje
-                       |
-                       v
-                AST compartido
-                       |
-                       v
-   Análisis semántico y tabla de símbolos
-                       |
-                       v
-       Código intermedio: lista de cuartetas
-                       |
-             +---------+---------+
-             |                   |
-             v                   v
-      Generador de C      Generador de RISC-V
-             |                   |
-             v                   v
-      Compilador C       Runtime + simulador RARS
+┌──────────────────────┐
+│ VentanaPrincipal     │
+│ Interfaz Swing       │
+└──────────┬───────────┘
+           │ compila archivo .pig e imports
+           v
+┌──────────────────────┐     ┌──────────────────────┐
+│ PigLatinASTBuilder   │     │ YLangASTBuilder      │
+└──────────┬───────────┘     └──────────┬───────────┘
+           │                            │
+           │                 ┌──────────v───────────┐
+           │                 │ ZetarianoASTBuilder  │
+           │                 └──────────┬───────────┘
+           └──────────────┬─────────────┘
+                          v
+                 ┌──────────────────┐
+                 │ AST compartido   │
+                 │ ast.*            │
+                 └────────┬─────────┘
+                          v
+                 ┌──────────────────┐
+                 │ SemanticAnalyzer │
+                 │ SymbolTable      │
+                 │ TypeCompat       │
+                 └────────┬─────────┘
+                          v
+                 ┌──────────────────┐
+                 │ IntermediateCode │
+                 │ Generator         │
+                 └────────┬─────────┘
+                          v
+                 ┌──────────────────┐
+                 │ Cuartetas / IR   │
+                 └──────┬─────┬─────┘
+                        │     │
+             ┌──────────v┐   ┌v────────────────┐
+             │ CCode     │   │ RiscVCode      │
+             │ Generator │   │ Generator      │
+             └──────┬────┘   └──────┬─────────┘
+                    v               v
+             Código C         Ensamblador RISC-V
+                    │               │
+                    v               v
+             GCC/Clang/cl.exe   RarsRunner / RARS
 ```
 
 `VentanaPrincipal` coordina la compilación iniciada desde la interfaz. Los constructores de cada lenguaje transforman sus árboles de análisis a nodos de `ast`. El análisis semántico, el código intermedio y los generadores trabajan sobre estas estructuras comunes.
+
+El diagrama de clases lógico puede resumirse así:
+
+```text
+ProgramNode
+├── ImportNode
+├── ClassDeclNode / StructDeclNode
+├── FunctionDeclNode / MethodDeclNode
+├── VariableDeclNode / ArrayDeclNode
+├── IfNode / WhileNode / ForNode / SwitchNode
+├── AssignmentNode / ReturnNode
+└── BinaryOpNode / UnaryOpNode / AccessNode
+
+SemanticAnalyzer
+├── SymbolTable
+├── Scope
+├── Symbol
+└── TypeCompat
+
+IntermediateCodeGenerator
+└── Cuarteta
+    ├── Asignacion3D
+    ├── Operacion3D
+    ├── Condicional3D
+    ├── Goto3D / Etiqueta3D
+    ├── Llamada3D / LlamadaVirtual3D
+    ├── Imprimir3D / Leer3D
+    └── Retornar3D
+```
 
 ## 5. Lenguajes y archivos fuente
 
@@ -128,6 +177,56 @@ Cada lenguaje tiene un constructor específico: `PigLatinASTBuilder`, `YLangASTB
 
 Al modificar una gramática debe editarse el archivo `.g4`, no la fuente Java generada. Después se ejecuta `mvn clean package` para regenerar y compilar los analizadores.
 
+### 6.1 Palabras reservadas
+
+Las palabras reservadas no pueden utilizarse como identificadores en el lenguaje correspondiente.
+
+| Lenguaje | Palabras reservadas |
+|---|---|
+| Pig Latin | `import`, `esto`, `series`, `novus`, `null`, `finis`, `si`, `aliter`, `dum`, `facere`, `per`, `perge`, `interrumpe`, `non`, `verum`, `falsus`, `numerus`, `decimalis`, `textum`, `littera`, `bool`, `variabiles>`, `maior>` |
+| Y? | `estructura`, `definir`, `retornar`, `si`, `entonces`, `sino`, `contrario`, `elegir`, `caso`, `siempre`, `romper`, `continuar`, `para`, `mientras`, `hacer`, `entero`, `flotante`, `cadena`, `caracter`, `bool`, `verdadero`, `falso`, `%estructuras`, `%funciones` |
+| Zetariano | `class`, `public`, `private`, `protected`, `extends`, `this`, `super`, `@Override`, `void`, `new`, `null`, `true`, `false`, `if`, `else`, `switch`, `case`, `default`, `break`, `continue`, `for`, `while`, `do`, `return`, `int`, `double`, `char`, `boolean`, `String` |
+
+### 6.2 Símbolos y operadores
+
+Los tres lenguajes comparten los operadores principales, aunque cada uno tiene símbolos de sección y sentencias propios.
+
+| Categoría | Pig Latin | Y? | Zetariano |
+|---|---|---|---|
+| Aritmética | `+ - * /` | `+ - * /` | `+ - * / %` |
+| Comparación | `== != < > <= >=` | `== != < > <= >=` | `== != < > <= >=` |
+| Lógica | `&& ||`, `non` | `&& ||`, `!` | `&& ||`, `!` |
+| Asignación | `=` | `=` | `=`, `+=`, `-=`, `*=` |
+| Incremento | `++`, `--` | `++`, `--` | `++`, `--` |
+| Delimitadores | `() {} [] , . : ;` | `() {} [] , . : ;` | `() {} [] , . : ;` |
+| Texto y caracteres | `"texto"`, `'c'` | `"texto"`, `'c'` | `"texto"`, `'c'` |
+| Secciones | `VARIABILES>`, `MAIOR>`, `FINIS` | `%estructuras`, `%funciones` | clase delimitada por `{}` |
+| Entrada y salida | `<<`, `>>` | funciones registradas por el compilador | llamadas y sentencias del lenguaje |
+
+Los comentarios son `//` y `/* ... */` en Y? y Zetariano. Pig Latin utiliza `//` y `## ... ##`.
+
+### 6.3 Estructura gramatical resumida
+
+```text
+programaPig
+    ::= importacion* variables? principal EOF
+principal
+    ::= "MAIOR>" sentencia* "FINIS" ";"
+
+programaY
+    ::= saltos* estructuras? funciones EOF
+funcionY
+    ::= "definir" nombre "(" parametros? ")" ("->" tipo)? ":" INDENT sentencia+ DEDENT
+
+programaZ
+    ::= visibilidad? "class" nombre ("extends" nombre)?
+        "{" miembroClase* "}" EOF
+miembroClase
+    ::= campo | constructor | metodo
+```
+
+En Y? los tokens `INDENT` y `DEDENT` son fabricados por el lexer a partir de la indentación. En Pig Latin y Zetariano los bloques se delimitan con llaves o con las marcas propias del lenguaje. Las expresiones siguen una precedencia de menor a mayor: `||`, `&&`, igualdad, relacionales, suma/resta, multiplicación/división y operadores unarios.
+
 ## 7. Análisis semántico
 
 `SemanticAnalyzer` recibe una lista de nodos `ProgramNode` que contiene el programa principal y sus importaciones cargadas. El análisis se organiza en dos recorridos:
@@ -139,6 +238,49 @@ Al modificar una gramática debe editarse el archivo `.g4`, no la fuente Java ge
 `SymbolTable`, `Scope` y `Symbol` representan ámbitos, identificadores y sus atributos. `ContextoSemanticoImpl` ofrece operaciones de consulta, definición y registro de errores para los nodos. `TypeCompat` y las clases de apoyo de programación orientada a objetos participan en la comprobación de tipos, herencia y miembros.
 
 Si hay errores sintácticos o semánticos, la interfaz los registra y detiene el flujo antes de generar las cuartetas de esa compilación. El reporte de símbolos presenta nombre, tipo, clase de símbolo, tamaño y línea disponible.
+
+### 7.1 Tipos del modelo común
+
+El AST utiliza `INT`, `FLOAT`, `STRING`, `BOOL`, `CHAR`, `VOID`, `STRUCT`, `CLASS`, `ARRAY` y `NULL`. Los nombres equivalentes en cada lenguaje son:
+
+| Tipo común | Pig Latin | Y? | Zetariano |
+|---|---|---|---|
+| `INT` | `numerus` | `entero` | `int` |
+| `FLOAT` | `decimalis` | `flotante` | `double` |
+| `STRING` | `textum` | `cadena` | `String` |
+| `CHAR` | `littera` | `caracter` | `char` |
+| `BOOL` | `bool` | `bool` | `boolean` |
+| `VOID` | no disponible como tipo primitivo | no disponible explícitamente | `void` |
+| referencia | estructura/clase | estructura o identificador | clase o arreglo |
+| nulo | `null` | no tiene literal propio en la gramática | `null` |
+
+### 7.2 Tabla de compatibilidad y conversiones
+
+La tabla siguiente describe `TypeCompat.tipoAritmetico` y las conversiones que utiliza `BinaryOpNode` para generar cuartetas. `—` significa que la operación es rechazada semánticamente.
+
+| Operación | INT | FLOAT | STRING | CHAR | BOOL |
+|---|---:|---:|---:|---:|---:|
+| `INT +` | `INT` | `FLOAT` | `STRING` | — | `STRING` |
+| `FLOAT +` | `FLOAT` | `FLOAT` | `STRING` | — | `STRING` |
+| `STRING +` | `STRING` | `STRING` | `STRING` | `STRING` | `STRING` |
+| `CHAR +` | — | — | `STRING` | — | — |
+| `BOOL +` | — | — | `STRING` | — | — |
+
+Para `-`, `*`, `/` y `%`, sólo se permiten operandos numéricos: `INT` con `INT` produce `INT`; cualquier combinación válida con `FLOAT` produce `FLOAT`, excepto `%`, que se calcula como residuo entero después de convertir los operandos. Una cadena no se convierte implícitamente a número.
+
+Cuando una suma involucra una cadena, el otro operando se convierte así:
+
+| Tipo original | Conversión interna | Resultado |
+|---|---|---|
+| `INT` | `strd` | `STRING` |
+| `FLOAT` | `strn` | `STRING` |
+| `CHAR` | `strc` | `STRING` |
+| `BOOL` | `strd` | `STRING` |
+| `STRING` | sin conversión | `STRING` |
+
+Las comparaciones `==` y `!=` aceptan tipos iguales, combinaciones numéricas, y `NULL` con strings, estructuras o clases. La igualdad de strings compara su contenido, no sólo sus direcciones. Las comparaciones `<`, `>`, `<=` y `>=` aceptan números y caracteres. `&&` y `||` requieren booleanos.
+
+La asignación permite convertir `INT` a `FLOAT`. También permite asignar `NULL` a `STRING`, `STRUCT` y `CLASS`. No se convierten automáticamente strings a números, números a strings fuera de una concatenación, ni valores booleanos a números.
 
 ## 8. Código intermedio
 
@@ -187,9 +329,9 @@ El heap reservado por el generador es de 3 145 728 bytes y el área `Str_libre` 
 
 `EmisorMemoria` distingue cargas enteras y de punto flotante, y calcula direcciones para campos e índices mediante un conjunto de registros temporales. Los valores `double` se cargan con `fld`; las cargas de palabras usan `lw`. La traducción realiza conversiones cuando la operación concreta las requiere.
 
-### 10.3 Runtime y ejecución
+### 10.3 Ejecución
 
-`RuntimeRiscV` contiene las rutinas auxiliares RISC-V como una constante Java. Al presionar **Ejecutar en RARS**, `PanelCodigoRISCV` concatena el código del panel con el runtime y guarda el resultado en `build/programa.s` de la carpeta del proyecto. El botón **Guardar .s**, en cambio, guarda el texto mostrado en el panel; para ejecutar ese archivo por separado puede ser necesario agregarle el runtime.
+Las operaciones de entrada, salida, conversión, comparación de strings, concatenación y manejo de errores se emiten directamente desde los emisores RISC-V. No existe un runtime RISC-V separado que deba copiarse o concatenarse al ensamblador generado. `PanelCodigoRISCV` guarda y ejecuta directamente el texto producido por `RiscVCodeGenerator`.
 
 `RarsRunner` ensambla y ejecuta el texto mediante la API de RARS. Normaliza los saltos CRLF y elimina un BOM inicial si existe. La ejecución utiliza un límite de 30 000 000 de instrucciones por defecto y devuelve uno de los estados `OK`, `ERROR_ENSAMBLADO`, `ERROR_EJECUCION` o `LIMITE_PASOS`. La interfaz ejecuta la simulación en un hilo separado y muestra la salida y el estado en el log.
 
@@ -227,7 +369,7 @@ El ciclo genera los analizadores de ANTLR, compila las clases Java y construye:
 target/Alien_code-1.0-SNAPSHOT.jar
 ```
 
-El proyecto utiliza `maven-antrun-plugin` durante `process-classes` para incorporar las clases y recursos del `libs/rars.jar` local. `maven-shade-plugin` empaqueta las dependencias Maven y establece `cunoc.compi2.alien_code.Alien_code` como clase principal del manifiesto. El runtime forma parte de `RuntimeRiscV`.
+El proyecto utiliza `maven-antrun-plugin` durante `process-classes` para incorporar las clases y recursos del `libs/rars.jar` local. `maven-shade-plugin` empaqueta las dependencias Maven y establece `cunoc.compi2.alien_code.Alien_code` como clase principal del manifiesto. Las operaciones RISC-V forman parte de los emisores del compilador.
 
 Para iniciar el resultado:
 
@@ -246,7 +388,7 @@ También puede abrirse mediante doble clic cuando el sistema tenga configurada l
 | No se encuentra una importación | Revisar que el archivo exista y que la ruta con puntos corresponda a la ubicación relativa al `.pig`. |
 | La compilación usa una versión anterior del archivo | Guardar la pestaña activa antes de compilar, porque el AST se construye leyendo el archivo desde disco. |
 | No aparece un compilador C | Instalar GCC, Clang o `cl.exe` y agregarlos al `PATH` de la aplicación. |
-| RARS reporta un error de ensamblado | Revisar el log, el código generado y la presencia del runtime en el archivo ejecutado. |
+| RARS reporta un error de ensamblado | Revisar el log y el código RISC-V generado, especialmente etiquetas, registros y offsets. |
 | RARS alcanza el límite de pasos | Revisar los ciclos del programa y sus entradas; el límite protege la interfaz de ejecuciones prolongadas. |
 | Un programa necesita entrada durante la simulación | La acción gráfica envía entrada vacía; debe ejecutarse mediante un mecanismo que suministre la entrada antes de iniciar RARS. |
 

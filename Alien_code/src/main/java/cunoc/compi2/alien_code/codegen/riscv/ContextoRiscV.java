@@ -59,6 +59,7 @@ public final class ContextoRiscV {
     private int nextFmtLabel = 0;
     private int nextVirtualSite = 0;
     private int nextErrorBranch = 0;
+    private final Map<String, String> mensajesError = new LinkedHashMap<>();
 
     public ContextoRiscV(List<Cuarteta> todas, SymbolTable tabla, Map<Integer, String> tiposTemporales,
             ClaseLayouts layouts) {
@@ -167,29 +168,53 @@ public final class ContextoRiscV {
     public void emitirErrorSiCero(String registro, String rutina) {
         String continuar = "L_error_branch_" + nextErrorBranch++;
         emitir("    bnez " + registro + ", " + continuar);
-        emitir("    jal ra, " + rutina);
+        emitirErrorInline(rutina);
         emitir(continuar + ":");
     }
 
     public void emitirErrorSiNoCero(String registro, String rutina) {
         String continuar = "L_error_branch_" + nextErrorBranch++;
         emitir("    beqz " + registro + ", " + continuar);
-        emitir("    jal ra, " + rutina);
+        emitirErrorInline(rutina);
         emitir(continuar + ":");
     }
 
     public void emitirErrorSiNegativo(String registro, String rutina) {
         String continuar = "L_error_branch_" + nextErrorBranch++;
         emitir("    bgez " + registro + ", " + continuar);
-        emitir("    jal ra, " + rutina);
+        emitirErrorInline(rutina);
         emitir(continuar + ":");
     }
 
     public void emitirErrorSiMayorOIgual(String izquierda, String limite, String rutina) {
         String continuar = "L_error_branch_" + nextErrorBranch++;
         emitir("    blt " + izquierda + ", " + limite + ", " + continuar);
-        emitir("    jal ra, " + rutina);
+        emitirErrorInline(rutina);
         emitir(continuar + ":");
+    }
+
+    public void emitirErrorInline(String rutina) {
+        String etiqueta = mensajesError.get(rutina);
+        boolean nuevo = etiqueta == null;
+        if (nuevo) {
+            etiqueta = "err_msg_" + mensajesError.size();
+            mensajesError.put(rutina, etiqueta);
+        }
+        String texto = switch (rutina) {
+            case "error_indice" -> "Error: indice fuera de rango\\n";
+            case "error_division" -> "Error: division entre cero\\n";
+            case "error_nulo" -> "Error: referencia nula\\n";
+            default -> "Error: despacho virtual invalido\\n";
+        };
+        emitir("    la a0, " + etiqueta);
+        emitir("    li a7, 4");
+        emitir("    ecall");
+        emitir("    li a7, 10");
+        emitir("    ecall");
+    }
+
+    public Map<String, String> mensajesError() {
+        return mensajesError;
     }
 
     public void setTipoRV(MemoryAccess op, TipoRV t) { tipoRV.put(op, t); }
@@ -358,6 +383,10 @@ public final class ContextoRiscV {
     }
 
     public int siguienteSitioVirtual() {
+        return nextVirtualSite++;
+    }
+
+    public int siguienteSitioInline() {
         return nextVirtualSite++;
     }
 

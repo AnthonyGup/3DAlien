@@ -95,8 +95,7 @@ public final class GeneralHarness {
                     instructions,
                     semantic.getSymbolTable(),
                     intermediate.getTiposTemporales(),
-                    intermediate.getLayouts()) + "\n"
-                    + cunoc.compi2.alien_code.runner.RuntimeRiscV.texto();
+                    intermediate.getLayouts());
             return new BuildResult(assembly, null);
         } catch (Exception exception) {
             return new BuildResult(null, exception.toString());

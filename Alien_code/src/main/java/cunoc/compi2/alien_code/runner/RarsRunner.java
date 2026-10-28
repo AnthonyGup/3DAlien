@@ -13,7 +13,7 @@ import java.util.ArrayList;
  * Ensambla y ejecuta un programa RISC-V (String) dentro de la aplicacion usando
  * la API de RARS 1.6.
  * Entrada: RARS recibe todo el stdin antes de ejecutar. Se le agrega al final una
- * linea con el byte 0x04 que el runtime (rt_getc) interpreta como fin de entrada.
+ * linea con el byte 0x04 que el lector interpreta como fin de entrada.
  */
 public final class RarsRunner {
 

@@ -62,6 +62,13 @@ public class PanelArbolProyecto extends JPanel {
     }
 
     public void recargar() {
+        java.util.List<String> expandidas = new java.util.ArrayList<>();
+        for (int i = 0; i < arbol.getRowCount(); i++) {
+            TreePath ruta = arbol.getPathForRow(i);
+            if (ruta != null && arbol.isExpanded(ruta)) {
+                expandidas.add(rutaArchivo(ruta));
+            }
+        }
         nodoRaiz.removeAllChildren();
         if (raizProyecto != null && raizProyecto.isDirectory()) {
             nodoRaiz.setUserObject(raizProyecto.getName());
@@ -73,6 +80,35 @@ public class PanelArbolProyecto extends JPanel {
         }
         modelo.reload();
         expandir(nodoRaiz);
+        for (String ruta : expandidas) {
+            expandirPorArchivo(ruta);
+        }
+    }
+
+    private String rutaArchivo(TreePath ruta) {
+        Object ultimo = ((DefaultMutableTreeNode) ruta.getLastPathComponent()).getUserObject();
+        return ultimo instanceof File archivo ? archivo.getAbsolutePath() : "";
+    }
+
+    private void expandirPorArchivo(String rutaArchivo) {
+        if (rutaArchivo == null || rutaArchivo.isEmpty()) return;
+        DefaultMutableTreeNode encontrado = buscarNodo(nodoRaiz, rutaArchivo);
+        if (encontrado != null) {
+            expandir(encontrado);
+        }
+    }
+
+    private DefaultMutableTreeNode buscarNodo(DefaultMutableTreeNode nodo, String rutaArchivo) {
+        Object valor = nodo.getUserObject();
+        if (valor instanceof File archivo && archivo.getAbsolutePath().equals(rutaArchivo)) {
+            return nodo;
+        }
+        for (int i = 0; i < nodo.getChildCount(); i++) {
+            DefaultMutableTreeNode encontrado = buscarNodo(
+                    (DefaultMutableTreeNode) nodo.getChildAt(i), rutaArchivo);
+            if (encontrado != null) return encontrado;
+        }
+        return null;
     }
 
     private DefaultMutableTreeNode construirNodo(File archivo) {

@@ -58,6 +58,15 @@ public final class RiscVCodeGenerator {
                 ctx.emitirDato(e.getValue() + ": .double " + e.getKey());
             }
         }
+        for (var e : ctx.mensajesError().entrySet()) {
+            String texto = switch (e.getKey()) {
+                case "error_indice" -> "Error: indice fuera de rango\\n";
+                case "error_division" -> "Error: division entre cero\\n";
+                case "error_nulo" -> "Error: referencia nula\\n";
+                default -> "Error: despacho virtual invalido\\n";
+            };
+            ctx.emitirDato(e.getValue() + ": .asciz \"" + texto + "\"");
+        }
     }
 
     private void emitirBytes(ContextoRiscV ctx, String etiqueta, String texto) {

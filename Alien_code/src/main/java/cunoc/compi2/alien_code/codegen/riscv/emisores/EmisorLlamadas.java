@@ -15,10 +15,12 @@ import java.util.List;
 public final class EmisorLlamadas {
     private final ContextoRiscV ctx;
     private final EmisorMemoria memoria;
+    private final EmisorAritmetica aritmetica;
 
     public EmisorLlamadas(ContextoRiscV ctx, EmisorMemoria memoria) {
         this.ctx = ctx;
         this.memoria = memoria;
+        this.aritmetica = new EmisorAritmetica(ctx, memoria);
     }
 
     public void llamada(Llamada3D lam) {
@@ -40,21 +42,16 @@ public final class EmisorLlamadas {
         List<MemoryAccess> args = lam.getArgumentos();
         switch (fn == null ? "" : fn) {
             case "conc" -> {
-                if (args.size() > 0) memoria.cargarEntero(args.get(0), "a0");
-                if (args.size() > 1) memoria.cargarEntero(args.get(1), "a1");
-                ctx.emitir("    jal ra, rt_conc");
+                aritmetica.emitirNativa(fn, args);
             }
             case "strd" -> {
-                if (!args.isEmpty()) memoria.cargarEntero(args.get(0), "a0");
-                ctx.emitir("    jal ra, rt_strd");
+                aritmetica.emitirNativa(fn, args);
             }
             case "strn" -> {
-                if (!args.isEmpty()) memoria.cargarDouble(args.get(0), "fa0");
-                ctx.emitir("    jal ra, rt_strn");
+                aritmetica.emitirNativa(fn, args);
             }
             case "strc" -> {
-                if (!args.isEmpty()) memoria.cargarEntero(args.get(0), "a0");
-                ctx.emitir("    jal ra, rt_strc");
+                aritmetica.emitirNativa(fn, args);
             }
             default -> { return false; }
         }
@@ -81,7 +78,7 @@ public final class EmisorLlamadas {
             ctx.emitir("    beq t1, t2, Lv" + k + "_c" + n);
             n++;
         }
-        ctx.emitir("    jal ra, rt_error_despacho");
+        ctx.emitirErrorInline("error_despacho");
         n = 0;
         for (ClaseLayout.ImplMetodo impl : virt.getCandidatos()) {
             ctx.emitir("Lv" + k + "_c" + n + ":");

@@ -21,7 +21,7 @@ El archivo `.pig` activo declara sus dependencias mediante `import`. Por ejemplo
 - Un entorno gráfico para la interfaz Swing.
 - Opcionalmente, GCC, Clang o `cl.exe` en el `PATH` para compilar el código C generado.
 
-El JAR incluye ANTLR, RSyntaxTextArea, RARS y el runtime RISC-V. No incluye la máquina virtual de Java.
+El JAR incluye ANTLR, RSyntaxTextArea y RARS. No incluye la máquina virtual de Java.
 
 ## Ejecutar la aplicación
 
@@ -62,7 +62,7 @@ La opción de ejecución RARS de la interfaz entrega una entrada vacía al progr
     ├── pom.xml
     ├── libs/rars.jar
     ├── src/main/antlr4/       Gramáticas ANTLR
-    ├── src/main/java/         Compilador, interfaz y runtime RISC-V
+    ├── src/main/java/         Compilador, interfaz y generadores de código
     └── target/                Archivos generados por Maven
 ```
 

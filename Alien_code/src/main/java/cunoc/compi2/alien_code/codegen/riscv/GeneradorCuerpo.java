@@ -188,7 +188,8 @@ public final class GeneradorCuerpo {
             ctx.emitir("    add sp, sp, t6");
         }
         if (esMain) {
-            ctx.emitir("    jal ra, rt_exit");
+            ctx.emitir("    li a7, 10");
+            ctx.emitir("    ecall");
         } else {
             ctx.emitir("    ret");
         }

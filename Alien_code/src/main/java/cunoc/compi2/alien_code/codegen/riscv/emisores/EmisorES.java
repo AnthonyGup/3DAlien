@@ -28,7 +28,8 @@ public final class EmisorES {
                 if (!trozo.texto().isEmpty()) {
                     String et = ctx.registrarFormato(trozo.texto());
                     ctx.emitir("    la a0, " + et);
-                    ctx.emitir("    jal ra, rt_print_cstr");
+                    ctx.emitir("    li a7, 4");
+                    ctx.emitir("    ecall");
                 }
                 continue;
             }
@@ -50,28 +51,48 @@ public final class EmisorES {
             case "%s" -> {
                 memoria.cargarEntero(op, "a0");
                 if (t == TipoRV.BOOL) {
-                    ctx.emitir("    jal ra, rt_print_bool");
+                    emitirBooleano();
                 } else {
-                    ctx.emitir("    jal ra, rt_print_str");
+                    ctx.emitir("    li a7, 4");
+                    ctx.emitir("    ecall");
                 }
             }
             case "%c" -> {
                 memoria.cargarEntero(op, "a0");
-                ctx.emitir("    jal ra, rt_print_char");
+                ctx.emitir("    li a7, 11");
+                ctx.emitir("    ecall");
             }
             case "%g", "%f", "%e" -> {
                 memoria.cargarDouble(op, "fa0");
-                ctx.emitir("    jal ra, rt_print_g");
+                ctx.emitir("    li a7, 3");
+                ctx.emitir("    ecall");
             }
             case "%p" -> {
                 memoria.cargarEntero(op, "a0");
-                ctx.emitir("    jal ra, rt_print_ptr");
+                ctx.emitir("    li a7, 34");
+                ctx.emitir("    ecall");
             }
             default -> {
                 memoria.cargarEntero(op, "a0");
-                ctx.emitir("    jal ra, rt_print_int");
+                ctx.emitir("    li a7, 1");
+                ctx.emitir("    ecall");
             }
         }
+    }
+
+    private void emitirBooleano() {
+            int n = ctx.siguienteSitioInline();
+            String fin = "L_bool_" + n + "_end";
+            String si = ctx.registrarCadena("true");
+            String no = ctx.registrarCadena("false");
+            ctx.emitir("    bnez a0, " + fin + "_true");
+            ctx.emitir("    la a0, " + no);
+            ctx.emitir("    j " + fin);
+            ctx.emitir(fin + "_true:");
+            ctx.emitir("    la a0, " + si);
+            ctx.emitir(fin + ":");
+            ctx.emitir("    li a7, 4");
+            ctx.emitir("    ecall");
     }
 
     public void leer(Leer3D leer) {
@@ -79,19 +100,40 @@ public final class EmisorES {
         MemoryAccess destino = leer.getResult();
         switch (fmt) {
             case "%s" -> {
-                memoria.cargarEntero(destino, "a0");
-                ctx.emitir("    jal ra, rt_read_str");
+                ctx.emitir("    mv a0, s2");
+                ctx.emitir("    li a1, 1024");
+                ctx.emitir("    li a7, 8");
+                ctx.emitir("    ecall");
+                ctx.emitir("    mv t0, s2");
+                String fin = "L_read_str_" + ctx.siguienteSitioInline();
+                ctx.emitir(fin + "_loop:");
+                ctx.emitir("    lbu t1, 0(s2)");
+                ctx.emitir("    li t2, 10");
+                ctx.emitir("    beq t1, t2, " + fin + "_trim");
+                ctx.emitir("    li t2, 13");
+                ctx.emitir("    beq t1, t2, " + fin + "_trim");
+                ctx.emitir("    addi s2, s2, 1");
+                ctx.emitir("    bnez t1, " + fin + "_loop");
+                ctx.emitir("    j " + fin + "_done");
+                ctx.emitir(fin + "_trim:");
+                ctx.emitir("    sb zero, 0(s2)");
+                ctx.emitir("    addi s2, s2, 1");
+                ctx.emitir(fin + "_done:");
+                memoria.guardarEntero(destino, "t0");
             }
             case "%c" -> {
-                ctx.emitir("    jal ra, rt_read_char");
+                ctx.emitir("    li a7, 12");
+                ctx.emitir("    ecall");
                 memoria.guardarEntero(destino, "a0");
             }
             case "%lf", "%f", "%g" -> {
-                ctx.emitir("    jal ra, rt_read_double");
+                ctx.emitir("    li a7, 7");
+                ctx.emitir("    ecall");
                 memoria.guardarDouble(destino, "fa0");
             }
             default -> {
-                ctx.emitir("    jal ra, rt_read_int");
+                ctx.emitir("    li a7, 5");
+                ctx.emitir("    ecall");
                 memoria.guardarEntero(destino, "a0");
             }
         }
